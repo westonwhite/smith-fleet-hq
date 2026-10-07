@@ -31,6 +31,9 @@ const store = {
   set token(v)  { localStorage.setItem("tw_token", v); },
   get rate()    { const v = parseFloat(localStorage.getItem("tw_rate")); return isNaN(v) ? 0.18 : v; },
   set rate(v)   { localStorage.setItem("tw_rate", String(v)); },
+  /* gas price for the fleet "vs gas car" comparison; AAA national avg Oct 2026 */
+  get gasPrice() { const v = parseFloat(localStorage.getItem("tw_gas")); return isNaN(v) ? 4.37 : v; },
+  set gasPrice(v) { localStorage.setItem("tw_gas", String(v)); },
   /* null until the user sets home (address lookup / pick on map / manual) */
   get homeLat() { const v = localStorage.getItem("tw_home_lat"); return v === null ? null : parseFloat(v); },
   get homeLon() { const v = localStorage.getItem("tw_home_lon"); return v === null ? null : parseFloat(v); },
@@ -150,6 +153,7 @@ function computeMonth(drives, charges, rate) {
     kwhUsed,
     estCost: kwhAdded !== null ? kwhAdded * rate : null,
     hasData: md.length > 0 || mc.length > 0,
+    driveMiles: totalMi,
   };
 }
 
@@ -246,17 +250,35 @@ function statsText(c) {
   return parts.length ? parts.join(" · ") : null;
 }
 
-/* "62% Autopilot/FSD · 84 kWh in ($15.12) · 76 kWh used" */
-function monthText(m) {
+/* Blue FSD badge, Tesla-style. Tooltip keeps the honesty note: Tesla reports
+ * this as Autopilot engagement miles (includes FSD); the API can't split them. */
+function fsdBadge(pct) {
+  return '<span class="fsd-badge" title="Tesla reports this as Autopilot engagement ' +
+    'miles (includes FSD); the API can\'t split basic Autopilot from FSD.">' +
+    '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="9" fill="none" stroke="#2E9BFF" stroke-width="2.2"/>' +
+    '<circle cx="12" cy="12" r="2.6" fill="#2E9BFF"/>' +
+    '<path d="M12 12V3.5M12 12l-6.8 4.9M12 12l6.8 4.9" stroke="#2E9BFF" ' +
+    'stroke-width="2.2" stroke-linecap="round"/></svg> FSD ' + pct.toFixed(0) + '%</span>';
+}
+
+/* Face: FSD badge + "Energy consumed: X kWh (~$Y)". Details (charged vs used)
+ * tuck into a click-to-expand <details> so the card stays clean. */
+function monthHtml(m) {
   if (!m || !m.hasData) return "No drives yet this month";
-  const parts = [];
-  if (m.autopilotPct !== null) parts.push(m.autopilotPct.toFixed(0) + "% Autopilot/FSD");
+  const face = [];
+  if (m.autopilotPct !== null) face.push(fsdBadge(m.autopilotPct));
   if (m.kwhAdded !== null) {
-    parts.push(m.kwhAdded.toFixed(0) + " kWh in" +
-      (m.estCost !== null ? " ($" + m.estCost.toFixed(2) + ")" : ""));
+    face.push("Energy consumed: <b>" + m.kwhAdded.toFixed(0) + " kWh (~$" +
+      (m.estCost !== null ? m.estCost.toFixed(2) : "?") + ")</b>");
   }
-  if (m.kwhUsed !== null) parts.push(m.kwhUsed.toFixed(0) + " kWh used");
-  return parts.length ? parts.join(" · ") : "No drives yet this month";
+  const faceHtml = face.length ? face.join(" · ") : "No drives yet this month";
+  const det = [];
+  if (m.kwhAdded !== null) det.push("Charged " + m.kwhAdded.toFixed(1) + " kWh");
+  if (m.kwhUsed !== null) det.push("Driving used " + m.kwhUsed.toFixed(1) + " kWh");
+  if (!det.length) return faceHtml;
+  return '<details class="monthdet"><summary>' + faceHtml + "</summary><div>" +
+    det.join(" · ") + "</div></details>";
 }
 
 /* ---------- car photo canvases with spinning wheels ---------- */
@@ -333,7 +355,7 @@ function renderCards(cars) {
     const batt = batteryText(car);
     const dist = distanceText(car);
     const stats = statsText(car);
-    const month = monthText(car.month);
+    const month = monthHtml(car.month);
     card.innerHTML =
       '<div class="card-top">' +
         '<canvas width="360" height="150" data-vin="' + car.vin + '"></canvas>' +
@@ -348,9 +370,9 @@ function renderCards(cars) {
       '<div class="details">' +
         '<div>Battery: <b>' + escapeHtml(batt || "unknown") + '</b></div>' +
         (car.lat !== null && car.lon !== null
-          ? '<div>Location: <b>' + car.lat.toFixed(4) + ", " + car.lon.toFixed(4) + '</b></div>' : "") +
+          ? '<div id="loc-' + car.vin + '">Location: <b>' + car.lat.toFixed(4) + ", " + car.lon.toFixed(4) + '</b></div>' : "") +
         (stats ? '<div>Stats: <b>' + escapeHtml(stats) + '</b></div>' : "") +
-        '<div>This month: <b>' + escapeHtml(month) + '</b></div>' +
+        '<div>This month: ' + month + '</div>' +
         (car.error ? '<div style="color:#e08a8a">' + escapeHtml(car.error) + '</div>' : "") +
       '</div>';
     wrap.appendChild(card);
@@ -358,7 +380,59 @@ function renderCards(cars) {
   }
   const upd = document.getElementById("updated");
   upd.textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  enrichLocations(cars);
   spinLoop();
+}
+
+/* ---------- human-readable area names (Nominatim reverse geocode) ----------
+ * Raw lat/lon means nothing to a human, so each car card shows "Downtown
+ * Tampa" style names. Results are cached in localStorage (keyed by rounded
+ * coords) and the 3 cars' first-time lookups are staggered ~1.2s apart to
+ * respect Nominatim's ~1 req/sec courtesy limit. Coords stay as a tiny
+ * muted subtitle; raw coords are always the fallback. */
+function areaKey(lat, lon) { return "tw_area_" + lat.toFixed(3) + "," + lon.toFixed(3); }
+function getAreaName(lat, lon) { return localStorage.getItem(areaKey(lat, lon)); }
+function setAreaName(lat, lon, name) {
+  try { localStorage.setItem(areaKey(lat, lon), name); } catch (e) { /* storage full: skip */ }
+}
+function formatArea(addr) {
+  if (!addr) return null;
+  const hood = addr.suburb || addr.neighbourhood || addr.city_district ||
+               addr.hamlet || addr.borough || addr.quarter || null;
+  const city = addr.city || addr.town || addr.village || addr.municipality ||
+               addr.county || null;
+  if (hood && city && hood !== city) return hood + ", " + city;
+  return hood || city || null;
+}
+async function reverseGeocode(lat, lon) {
+  const cached = getAreaName(lat, lon);
+  if (cached !== null) return cached || null;
+  try {
+    const r = await fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" +
+      lat.toFixed(5) + "&lon=" + lon.toFixed(5) + "&zoom=14");
+    const j = await r.json();
+    const name = formatArea(j.address);
+    setAreaName(lat, lon, name || "");
+    return name;
+  } catch (e) { return null; }
+}
+function enrichLocations(cars) {
+  cars.forEach((car, i) => {
+    if (car.lat === null || car.lon === null) return;
+    const el = document.getElementById("loc-" + car.vin);
+    if (!el) return;
+    const apply = (name) => {
+      if (!name) return;  // lookup failed or empty: keep the coords fallback
+      const box = document.getElementById("loc-" + car.vin);
+      if (!box) return;
+      box.innerHTML = "Location: <b>" + escapeHtml(name) + "</b> " +
+        '<span class="coords" title="' + car.lat.toFixed(4) + ", " + car.lon.toFixed(4) + '">' +
+        car.lat.toFixed(2) + ", " + car.lon.toFixed(2) + "</span>";
+    };
+    const cached = getAreaName(car.lat, car.lon);
+    if (cached !== null) { if (cached) apply(cached); return; }
+    setTimeout(async () => { apply(await reverseGeocode(car.lat, car.lon)); }, i * 1200);
+  });
 }
 
 function escapeHtml(s) {
@@ -384,7 +458,7 @@ function initMap() {
     maxZoom: 19,
     attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics',
   });
-  streetsLayer.addTo(map);
+  satelliteLayer.addTo(map);  /* satellite is the default base layer */
   carLayer = L.layerGroup().addTo(map);
   buildMapCtl();
   loadRadar();
@@ -425,7 +499,10 @@ function loadRadar() {
       const url = d.host + frame.path + "/256/{z}/{x}/{y}/2/1_1.png";
       if (radarLayer) radarLayer.setUrl(url);
       else {
-        radarLayer = L.tileLayer(url, { opacity: 0.55, zIndex: 10,
+        /* RainViewer radar tiles only exist for zoom 0-7 (z8+ returns a
+         * "zoom level not supported" tile). maxNativeZoom: 7 makes Leaflet
+         * upscale the z7 tiles at closer zooms instead of requesting z8+. */
+        radarLayer = L.tileLayer(url, { opacity: 0.55, zIndex: 10, maxNativeZoom: 7,
           attribution: 'Radar &copy; <a href="https://www.rainviewer.com/">RainViewer</a>' });
         if (radarOn) radarLayer.addTo(map);
         if (mapCtl && mapCtl._paint) mapCtl._paint();
@@ -532,8 +609,46 @@ function setPickMode(on) {
 function pickClick(e) { if (pickMarker) pickMarker.setLatLng(e.latlng); }
 
 /* ---------- refresh / settings ---------- */
+/* Home counts as set only when both coords are real numbers (guards against
+ * empty-string/NaN values that are !== null but unusable). */
+function isHomeSet() {
+  const la = store.homeLat, lo = store.homeLon;
+  return la !== null && lo !== null && !isNaN(la) && !isNaN(lo);
+}
+
+/* Fleet month-to-date totals footer: EV electricity cost vs the same miles
+ * in a 15-mpg gas car. Rendered below the car cards. */
+function renderFleetFooter(cars) {
+  const el = document.getElementById("fleet");
+  if (!el) return;
+  const rate = store.rate, gas = store.gasPrice;
+  let added = 0, miles = 0, any = false;
+  for (const c of cars) {
+    const m = c.month;
+    if (!m || !m.hasData) continue;
+    any = true;
+    if (m.kwhAdded) added += m.kwhAdded;
+    if (m.driveMiles) miles += m.driveMiles;
+  }
+  if (!any) { el.innerHTML = ""; return; }
+  const evCost = added * rate;
+  const gasCost = miles / 15 * gas;
+  const saved = gasCost - evCost;
+  const savedTxt = saved >= 0
+    ? "You saved ~$" + saved.toFixed(2) + " vs gas"
+    : "Gas would have been ~$" + Math.abs(saved).toFixed(2) + " cheaper";
+  el.innerHTML =
+    '<div class="fleet-card">⚡ This month: <b>$' + evCost.toFixed(2) + "</b> electricity · " +
+    "⛽ Same miles in a 15-mpg gas car: <b>~$" + gasCost.toFixed(2) + "</b><br/>" +
+    '<span class="saved">' + savedTxt + "</span></div>";
+}
+
 async function refresh() {
   const errBox = document.getElementById("err");
+  /* Decide about the home nudge BEFORE any async work, so the prompt can
+   * never flash on and off mid-refresh: it only ever appears when home is
+   * genuinely unset, and stays hidden otherwise. */
+  const needHomeNudge = !isHomeSet();
   errBox.hidden = true;
   if (!store.token) {
     document.getElementById("settings").hidden = false;
@@ -545,7 +660,8 @@ async function refresh() {
     const cars = await poll();
     renderCards(cars);
     renderMap(cars);
-    if (store.homeLat === null) {
+    renderFleetFooter(cars);
+    if (needHomeNudge && !isHomeSet()) {
       errBox.hidden = false;
       errBox.textContent = "Set your home location in Settings (address lookup or pick on map).";
     }
@@ -562,6 +678,7 @@ function initSettings() {
   });
   document.getElementById("tokenInput").value = store.token;
   document.getElementById("rateInput").value = String(store.rate);
+  document.getElementById("gasInput").value = String(store.gasPrice);
   document.getElementById("latInput").value = localStorage.getItem("tw_home_lat") || "";
   document.getElementById("lonInput").value = localStorage.getItem("tw_home_lon") || "";
   document.getElementById("latInput").placeholder = "e.g. 28.1397";
@@ -571,6 +688,8 @@ function initSettings() {
     store.token = document.getElementById("tokenInput").value.trim();
     const r = parseFloat(document.getElementById("rateInput").value);
     if (!isNaN(r) && r >= 0) store.rate = r;
+    const gp = parseFloat(document.getElementById("gasInput").value);
+    if (!isNaN(gp) && gp > 0) store.gasPrice = gp;
     const la = parseFloat(document.getElementById("latInput").value);
     const lo = parseFloat(document.getElementById("lonInput").value);
     if (!isNaN(la) && !isNaN(lo)) store.setHome(la, lo);

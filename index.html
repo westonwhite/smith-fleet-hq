@@ -1,4 +1,4 @@
-<!-- Smith Robotaxi HQ build 2026-10-07 v9 -->
+<!-- Smith Robotaxi HQ build 2026-10-07 v10 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -48,6 +48,23 @@
   #pickbar button.cancel { background:#555; }
   #lookupResult { font-size:13px; color:var(--muted); margin-top:6px; }
   #useAddrBtn { background:#2e7d32 !important; }
+  .coords { font-size:11px; color:var(--faint); }
+  .fsd-badge { display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:700;
+               color:#fff; background:rgba(46,155,255,.16); border:1px solid #2E9BFF;
+               border-radius:8px; padding:2px 8px; vertical-align:1px;
+               animation:fsdpulse 2.6s ease-in-out infinite; }
+  @keyframes fsdpulse {
+    0%,100% { box-shadow:0 0 5px rgba(46,155,255,.30); }
+    50%     { box-shadow:0 0 13px rgba(46,155,255,.65); }
+  }
+  .monthdet summary { cursor:pointer; list-style:none; }
+  .monthdet summary::-webkit-details-marker { display:none; }
+  .monthdet > div { font-size:12px; color:var(--muted); margin-top:4px; }
+  #fleet { padding:0 14px; }
+  .fleet-card { background:#17251c; border:1px solid #2e5a3a; border-radius:14px;
+                padding:12px; font-size:13px; color:var(--muted); line-height:1.7; }
+  .fleet-card b { color:var(--fg); }
+  .fleet-card .saved { color:#7ee2a0; font-weight:700; font-size:14px; }
 </style>
 </head>
 <body>
@@ -63,6 +80,8 @@
   <input id="tokenInput" type="text" placeholder="paste token here" autocomplete="off" spellcheck="false"/>
   <label>Electricity rate ($/kWh) — used for the month charging-cost estimate</label>
   <input id="rateInput" type="text" inputmode="decimal" placeholder="0.18"/>
+  <label>Gas price ($/gal) — AAA national avg, Oct 2026</label>
+  <input id="gasInput" type="text" inputmode="decimal" placeholder="4.37"/>
   <label>Home location — type an address, or pick a point on the map</label>
   <input id="addrInput" type="text" placeholder="123 Main St, Tampa, FL" autocomplete="off"/>
   <button id="lookupBtn" style="margin-top:8px">Look up address</button>
@@ -78,6 +97,7 @@
 
 <div id="err" class="err" hidden></div>
 <div id="cards"></div>
+<div id="fleet"></div>
 <div id="map">
   <div id="pickbar" hidden>
     <button id="pickOkBtn">Confirm home</button>
@@ -86,6 +106,6 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=20261007v10"></script>
 </body>
 </html>
