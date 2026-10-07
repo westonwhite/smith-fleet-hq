@@ -580,8 +580,11 @@ function loadRadar() {
 
 /* ---------- today's route lines (OSRM road-following approximations) ----------
  * Tessie has no GPS breadcrumbs, so each of today's drives is re-routed along
- * roads between its start/end points via the free OSRM demo server. These are
- * approximations of the path driven, NOT the car's exact GPS track. */
+ * roads between its start/end points via the free OSRM demo server. OSRM is
+ * asked for alternative routes and the one whose length best matches
+ * the drive's actual odometer_distance is drawn (the fastest route isn't
+ * always the one taken). These are approximations of the path driven, NOT
+ * the car's exact GPS track. */
 const ROUTE_COLORS = {
   "5YJ3E1EA2JF051492": "#64d2ff",  /* Caroline's whip — blue */
   "5YJ3E1EA7JF015751": "#ff9f0a",  /* The Starship — orange */
@@ -624,11 +627,29 @@ function routeableDrives(drives) {
       d.sLat !== null && d.sLon !== null && d.eLat !== null && d.eLon !== null)
     .slice(0, 10);
 }
-/* OSRM wants lon,lat order */
+/* OSRM wants lon,lat order. alternatives=3 asks for up to 3 route options
+ * so we can pick the one whose length best matches the miles actually
+ * driven (see pickBestRoute below). */
 function osrmUrl(sLat, sLon, eLat, eLon) {
   return "https://router.project-osrm.org/route/v1/driving/" +
     sLon + "," + sLat + ";" + eLon + "," + eLat +
-    "?overview=full&geometries=geojson";
+    "?overview=full&geometries=geojson&alternatives=3";
+}
+/* Pick the OSRM route whose length (meters -> miles) is closest to the
+ * drive's actual odometer_distance. OSRM's default first route is the
+ * fastest, which isn't always the route taken (e.g. northern vs southern
+ * route around Lake Tarpon). Falls back to routes[0] when there's only one
+ * route or the actual distance is missing/zero. */
+function pickBestRoute(routes, odometerMiles) {
+  if (!routes || !routes.length) return null;
+  if (routes.length === 1 || !(odometerMiles > 0)) return routes[0];
+  let best = routes[0], bestDiff = Infinity;
+  for (const r of routes) {
+    const mi = (r.distance || 0) / 1609.344;
+    const diff = Math.abs(mi - odometerMiles);
+    if (diff < bestDiff) { bestDiff = diff; best = r; }
+  }
+  return best;
 }
 function drawRouteLine(vin, latlons) {
   if (!routeLayer || !latlons || latlons.length < 2) return;
@@ -639,8 +660,8 @@ async function fetchRoute(d, vin, gen) {
   try {
     const r = await fetch(osrmUrl(d.sLat, d.sLon, d.eLat, d.eLon));
     const j = await r.json();
-    const coords = j.routes && j.routes[0] && j.routes[0].geometry &&
-      j.routes[0].geometry.coordinates;
+    const route = pickBestRoute(j.routes, d.dist);
+    const coords = route && route.geometry && route.geometry.coordinates;
     if (!coords || coords.length < 2 || gen !== routeGen) return;
     const latlons = coords.map(p => [p[1], p[0]]);  /* GeoJSON is [lon,lat] */
     const c = getRouteCache();
