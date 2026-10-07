@@ -570,7 +570,7 @@ function loadRadar() {
         /* RainViewer radar tiles only exist for zoom 0-7 (z8+ returns a
          * "zoom level not supported" tile). maxNativeZoom: 7 makes Leaflet
          * upscale the z7 tiles at closer zooms instead of requesting z8+. */
-        radarLayer = L.tileLayer(url, { opacity: 0.55, zIndex: 10, maxNativeZoom: 7,
+        radarLayer = L.tileLayer(url, { opacity: 0.35, zIndex: 10, maxNativeZoom: 7,
           attribution: 'Radar &copy; <a href="https://www.rainviewer.com/">RainViewer</a>' });
         if (radarOn) radarLayer.addTo(map);
         if (mapCtl && mapCtl._paint) mapCtl._paint();
@@ -580,16 +580,54 @@ function loadRadar() {
 
 /* ---------- today's route lines (OSRM road-following approximations) ----------
  * Tessie has no GPS breadcrumbs, so each of today's drives is re-routed along
- * roads between its start/end points via the free OSRM demo server. OSRM is
- * asked for alternative routes and the one whose length best matches
- * the drive's actual odometer_distance is drawn (the fastest route isn't
- * always the one taken). These are approximations of the path driven, NOT
- * the car's exact GPS track. */
+ * roads between its start/end points via the free OSRM demo server.
+ * Two mechanisms:
+ *  1. ROUTE_HINTS: known corridor waypoints. Some routers never propose the
+ *     corridor actually driven (e.g. alternatives for the home->Tampa drive
+ *     are all western variants, never the eastern Keystone->Suncoast
+ *     corridor), so distance-matching can't fix that. A matching hint forces
+ *     the route through a via point.
+ *  2. Otherwise OSRM is asked for alternatives and the one whose length
+ *     best matches the drive's actual odometer_distance is drawn.
+ * These are approximations of the path driven, NOT the car's exact GPS track. */
 const ROUTE_COLORS = {
   "5YJ3E1EA2JF051492": "#64d2ff",  /* Caroline's whip — blue */
   "5YJ3E1EA7JF015751": "#ff9f0a",  /* The Starship — orange */
   "5YJ3E1EA9SF060398": "#bf5af2",  /* Miracle Whip — purple */
 };
+/* Corridor hints: {via: [lon, lat], a: {lat, lon, radius_mi},
+ * b: {lat, lon, radius_mi}}. Matched bidirectionally: drive start near a &
+ * end near b, OR start near b & end near a. "a" is resolved from the user's
+ * saved home at route time (never hardcoded). Keep labels neutral. */
+const ROUTE_HINTS = [
+  { via: [-82.60, 28.08],  /* eastern corridor via FL-589 */
+    aHome: true, aRadiusMi: 1.5,
+    b: { lat: 27.9364, lon: -82.4575 }, bRadiusMi: 1.5 },
+];
+/* great-circle distance in miles */
+function haversineMi(la1, lo1, la2, lo2) {
+  const R = 3958.7613, toRad = Math.PI / 180;
+  const dLa = (la2 - la1) * toRad, dLo = (lo2 - lo1) * toRad;
+  const h = Math.sin(dLa / 2) ** 2 +
+    Math.cos(la1 * toRad) * Math.cos(la2 * toRad) * Math.sin(dLo / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function nearPt(la, lo, pt, radiusMi) {
+  return haversineMi(la, lo, pt.lat, pt.lon) <= radiusMi;
+}
+/* return the matching hint or null; aHome hints resolve "a" from saved home */
+function matchRouteHint(d) {
+  const hLa = store.homeLat, hLo = store.homeLon;
+  for (const h of ROUTE_HINTS) {
+    const a = h.aHome ? { lat: hLa, lon: hLo } : h.a;
+    if (!a || a.lat === null || a.lon === null) continue;
+    const aR = h.aRadiusMi, bR = h.bRadiusMi;
+    const ab = nearPt(d.sLat, d.sLon, a, aR) && nearPt(d.eLat, d.eLon, h.b, bR);
+    const ba = nearPt(d.sLat, d.sLon, h.b, bR) && nearPt(d.eLat, d.eLon, a, aR);
+    if (ab || ba) return h;
+  }
+  return null;
+}
 let routeLayer = null;
 let routesOn = true;
 try { routesOn = (localStorage.getItem("tw_routes_on") || "1") === "1"; } catch (e) {}
@@ -601,7 +639,7 @@ function routeCacheKey(vin, sLat, sLon, eLat, eLon) {
   return [vin, sLat.toFixed(4), sLon.toFixed(4), eLat.toFixed(4), eLon.toFixed(4)].join("|");
 }
 function getRouteCache() {
-  try { return JSON.parse(localStorage.getItem("tw_routes_v2") || "{}"); }
+  try { return JSON.parse(localStorage.getItem("tw_routes_v3") || "{}"); }
   catch (e) { return {}; }
 }
 function setRouteCache(obj) {
@@ -611,7 +649,7 @@ function setRouteCache(obj) {
       const drop = keys.slice(0, keys.length - 150);
       for (const k of drop) delete obj[k];
     }
-    localStorage.setItem("tw_routes_v2", JSON.stringify(obj));
+    localStorage.setItem("tw_routes_v3", JSON.stringify(obj));
   } catch (e) {}
 }
 /* local midnight, browser-local, epoch seconds */
@@ -627,13 +665,19 @@ function routeableDrives(drives) {
       d.sLat !== null && d.sLon !== null && d.eLat !== null && d.eLon !== null)
     .slice(0, 10);
 }
-/* OSRM wants lon,lat order. alternatives=3 asks for up to 3 route options
- * so we can pick the one whose length best matches the miles actually
- * driven (see pickBestRoute below). */
+/* OSRM wants lon,lat order. osrmUrl asks for up to 3 route options so we
+ * can pick the one whose length best matches the miles actually driven
+ * (see pickBestRoute below). osrmUrlVia routes through a corridor hint
+ * waypoint instead (no alternatives needed — the via fixes the corridor). */
 function osrmUrl(sLat, sLon, eLat, eLon) {
   return "https://router.project-osrm.org/route/v1/driving/" +
     sLon + "," + sLat + ";" + eLon + "," + eLat +
     "?overview=full&geometries=geojson&alternatives=3";
+}
+function osrmUrlVia(sLat, sLon, eLat, eLon, via) {  /* via = [lon, lat] */
+  return "https://router.project-osrm.org/route/v1/driving/" +
+    sLon + "," + sLat + ";" + via[0] + "," + via[1] + ";" + eLon + "," + eLat +
+    "?overview=full&geometries=geojson";
 }
 /* Pick the OSRM route whose length (meters -> miles) is closest to the
  * drive's actual odometer_distance. OSRM's default first route is the
@@ -658,9 +702,14 @@ function drawRouteLine(vin, latlons) {
 }
 async function fetchRoute(d, vin, gen) {
   try {
-    const r = await fetch(osrmUrl(d.sLat, d.sLon, d.eLat, d.eLon));
+    const hint = matchRouteHint(d);
+    const r = await fetch(hint
+      ? osrmUrlVia(d.sLat, d.sLon, d.eLat, d.eLon, hint.via)
+      : osrmUrl(d.sLat, d.sLon, d.eLat, d.eLon));
     const j = await r.json();
-    const route = pickBestRoute(j.routes, d.dist);
+    /* hinted routes take the single via-forced route; unhinted drives
+     * distance-match across alternatives as before */
+    const route = hint ? (j.routes && j.routes[0]) : pickBestRoute(j.routes, d.dist);
     const coords = route && route.geometry && route.geometry.coordinates;
     if (!coords || coords.length < 2 || gen !== routeGen) return;
     const latlons = coords.map(p => [p[1], p[0]]);  /* GeoJSON is [lon,lat] */
