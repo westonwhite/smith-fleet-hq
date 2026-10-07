@@ -601,7 +601,7 @@ function routeCacheKey(vin, sLat, sLon, eLat, eLon) {
   return [vin, sLat.toFixed(4), sLon.toFixed(4), eLat.toFixed(4), eLon.toFixed(4)].join("|");
 }
 function getRouteCache() {
-  try { return JSON.parse(localStorage.getItem("tw_routes") || "{}"); }
+  try { return JSON.parse(localStorage.getItem("tw_routes_v2") || "{}"); }
   catch (e) { return {}; }
 }
 function setRouteCache(obj) {
@@ -611,7 +611,7 @@ function setRouteCache(obj) {
       const drop = keys.slice(0, keys.length - 150);
       for (const k of drop) delete obj[k];
     }
-    localStorage.setItem("tw_routes", JSON.stringify(obj));
+    localStorage.setItem("tw_routes_v2", JSON.stringify(obj));
   } catch (e) {}
 }
 /* local midnight, browser-local, epoch seconds */
