@@ -665,6 +665,10 @@ function computeFleetTotals(cars, rate, gas) {
 /* Thin month-totals strip under the header: ⚡ electricity (amber) ·
  * ⛽ gas-car equivalent (orange) · 💰 saved (green). Savings over $25 get a
  * glowing 🎉 pill as the exclamation point. */
+function monthLabel() {
+  const d = new Date();
+  return d.toLocaleString("en-US", { month: "short" }) + " " + d.getFullYear();
+}
 function renderFleetStrip(cars) {
   const el = document.getElementById("fleetstrip");
   if (!el) return;
@@ -679,6 +683,7 @@ function renderFleetStrip(cars) {
     savedHtml = '<span class="svneg">💰 gas ~$' + Math.abs(t.saved).toFixed(2) + ' cheaper</span>';
   }
   el.innerHTML =
+    '<span class="win">' + monthLabel() + ' · month to date</span>' +
     '<span class="ev" title="Electricity this month">⚡ $' + t.evCost.toFixed(2) + '</span>' +
     '<span class="sep">·</span>' +
     '<span class="gas" title="Same miles in a 15-mpg gas car">⛽ ~$' + t.gasCost.toFixed(2) + '</span>' +
