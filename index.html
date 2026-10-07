@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Smith Robotaxi HQ</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root { --bg:#14161b; --card:#1b1e24; --fg:#fff; --muted:#b0b6be; --faint:#7a8087; --accent:#4da3ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif; }
+  header { display:flex; align-items:center; gap:8px; padding:12px 14px 4px; }
+  header h1 { font-size:20px; margin:0; flex:1; }
+  header button { background:#262b33; color:var(--fg); border:1px solid #333a44;
+                  border-radius:10px; font-size:16px; padding:6px 10px; }
+  #updated { color:var(--faint); font-size:11px; text-align:right; padding:2px 14px 0; }
+  #settings { margin:10px 14px 0; padding:12px; background:var(--card);
+              border:1px solid #2a2f37; border-radius:12px; }
+  #settings label { display:block; font-size:12px; color:var(--muted); margin:8px 0 2px; }
+  #settings input { width:100%; padding:8px; border-radius:8px; border:1px solid #333a44;
+                    background:#101216; color:var(--fg); font-size:14px; }
+  #settings button { margin-top:10px; width:100%; padding:10px; border-radius:10px;
+                     border:none; background:var(--accent); color:#06121f;
+                     font-size:15px; font-weight:700; }
+  #cards { padding:10px 14px 0; display:flex; flex-direction:column; gap:10px; }
+  .card { background:var(--card); border:1px solid #2a2f37; border-radius:14px; padding:12px; }
+  .card-top { display:flex; align-items:center; gap:10px; }
+  .card-top canvas { width:120px; height:50px; border-radius:8px; flex:none; }
+  .name { font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .fsd-chip { font-size:10px; font-weight:700; color:#8fd3ff; background:#1c3a54;
+              border:1px solid #2e5a82; border-radius:8px; padding:2px 7px; }
+  .statusline { color:var(--muted); font-size:13px; margin-top:3px; }
+  .details { margin-top:8px; font-size:13px; color:var(--muted); display:grid; gap:2px; }
+  .details b { color:var(--fg); font-weight:600; }
+  .err { color:#e08a8a; font-size:13px; padding:10px 14px; }
+  #map { height:340px; margin:12px 14px 20px; border-radius:14px; border:1px solid #2a2f37; position:relative; }
+  .car-photo-icon { background:none !important; border:none !important; }
+  .mapctl { position:absolute; top:10px; right:10px; z-index:1000; display:flex; flex-direction:column; gap:6px; }
+  .mapctl button { background:rgba(255,255,255,.92); border:1px solid #999; border-radius:8px;
+                   padding:7px 10px; font-size:13px; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+  .mapctl button.active { background:#0d47a1; color:#fff; border-color:#0d47a1; }
+  #pickbar { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); z-index:1000;
+             display:flex; gap:8px; }
+  #pickbar button { background:#0d47a1; color:#fff; border:none; border-radius:10px;
+                    padding:10px 18px; font-size:15px; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+  #pickbar button.cancel { background:#555; }
+  #lookupResult { font-size:13px; color:var(--muted); margin-top:6px; }
+  #useAddrBtn { background:#2e7d32 !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ Smith Robotaxi HQ</h1>
+  <button id="refreshBtn" title="Refresh">↻</button>
+  <button id="settingsBtn" title="Settings">⚙</button>
+</header>
+<div id="updated"></div>
+
+<section id="settings" hidden>
+  <label>Tessie API token (generate at dash.tessie.com/settings/api)</label>
+  <input id="tokenInput" type="password" placeholder="paste token here" autocomplete="off"/>
+  <label>Home location — type an address, or pick a point on the map</label>
+  <input id="addrInput" type="text" placeholder="123 Main St, Tampa, FL" autocomplete="off"/>
+  <button id="lookupBtn" style="margin-top:8px">Look up address</button>
+  <div id="lookupResult"></div>
+  <button id="useAddrBtn" hidden>Use this address</button>
+  <button id="pickMapBtn" style="margin-top:8px; background:#2e5a82">Pick on map</button>
+  <label>Home latitude (manual fallback)</label>
+  <input id="latInput" type="text" inputmode="decimal"/>
+  <label>Home longitude (manual fallback)</label>
+  <input id="lonInput" type="text" inputmode="decimal"/>
+  <button id="saveBtn">Save</button>
+</section>
+
+<div id="err" class="err" hidden></div>
+<div id="cards"></div>
+<div id="map">
+  <div id="pickbar" hidden>
+    <button id="pickOkBtn">Confirm home</button>
+    <button id="pickCancelBtn" class="cancel">Cancel</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
