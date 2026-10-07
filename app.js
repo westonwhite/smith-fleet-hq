@@ -262,9 +262,10 @@ function fsdBadge(pct) {
     'stroke-width="2.2" stroke-linecap="round"/></svg> FSD ' + pct.toFixed(0) + '%</span>';
 }
 
-/* Face: FSD badge + "Energy consumed: X kWh (~$Y)". Details (charged vs used)
- * tuck into a click-to-expand <details> so the card stays clean. */
-function monthHtml(m) {
+/* Face (always visible): FSD badge + "Energy consumed: X kWh (~$Y)".
+ * Details (charged vs driving, week stats, odo, lifetime) tuck into one
+ * click-to-expand <details> so the card stays compact above the fold. */
+function monthFace(m) {
   if (!m || !m.hasData) return "No drives yet this month";
   const face = [];
   if (m.autopilotPct !== null) face.push(fsdBadge(m.autopilotPct));
@@ -272,13 +273,14 @@ function monthHtml(m) {
     face.push("Energy consumed: <b>" + m.kwhAdded.toFixed(0) + " kWh (~$" +
       (m.estCost !== null ? m.estCost.toFixed(2) : "?") + ")</b>");
   }
-  const faceHtml = face.length ? face.join(" · ") : "No drives yet this month";
+  return face.length ? face.join(" · ") : "No drives yet this month";
+}
+function monthDetailText(m) {
   const det = [];
+  if (!m) return "";
   if (m.kwhAdded !== null) det.push("Charged " + m.kwhAdded.toFixed(1) + " kWh");
   if (m.kwhUsed !== null) det.push("Driving used " + m.kwhUsed.toFixed(1) + " kWh");
-  if (!det.length) return faceHtml;
-  return '<details class="monthdet"><summary>' + faceHtml + "</summary><div>" +
-    det.join(" · ") + "</div></details>";
+  return det.join(" · ");
 }
 
 /* ---------- car photo canvases with spinning wheels ---------- */
@@ -344,7 +346,9 @@ function spinLoop() {
   if (anyDriving) requestAnimationFrame(spinLoop);
 }
 
-/* ---------- cards ---------- */
+/* ---------- cards (compact: everything above the map must fit a phone
+ * viewport, so battery merges into the status line and all month/week
+ * details share one expandable block) ---------- */
 function renderCards(cars) {
   carsCache = cars;
   const wrap = document.getElementById("cards");
@@ -355,24 +359,23 @@ function renderCards(cars) {
     const batt = batteryText(car);
     const dist = distanceText(car);
     const stats = statsText(car);
-    const month = monthHtml(car.month);
+    const statusBits = [batt, statusText(car), dist].filter(Boolean);
+    const detBody = [monthDetailText(car.month), stats].filter(Boolean).join(" · ");
     card.innerHTML =
       '<div class="card-top">' +
-        '<canvas width="360" height="150" data-vin="' + car.vin + '"></canvas>' +
+        '<canvas width="330" height="138" data-vin="' + car.vin + '"></canvas>' +
         '<div><div class="name">' + escapeHtml(car.name) +
           (FSD_VINS.has(car.vin) ? ' <span class="fsd-chip">FSD</span>' : '') +
         '</div>' +
-        '<div class="statusline">' + escapeHtml(statusText(car)) +
-          (dist ? " · " + escapeHtml(dist) : "") + '</div>' +
-        (car.nowPlaying ? '<div class="statusline">♪ ' + escapeHtml(car.nowPlaying) + '</div>' : '') +
+        '<div class="statusline">' + escapeHtml(statusBits.join(" · ")) + '</div>' +
+        (car.nowPlaying ? '<div class="statusline np">♪ ' + escapeHtml(car.nowPlaying) + '</div>' : '') +
         '</div>' +
       '</div>' +
       '<div class="details">' +
-        '<div>Battery: <b>' + escapeHtml(batt || "unknown") + '</b></div>' +
         (car.lat !== null && car.lon !== null
-          ? '<div id="loc-' + car.vin + '">Location: <b>' + car.lat.toFixed(4) + ", " + car.lon.toFixed(4) + '</b></div>' : "") +
-        (stats ? '<div>Stats: <b>' + escapeHtml(stats) + '</b></div>' : "") +
-        '<div>This month: ' + month + '</div>' +
+          ? '<div id="loc-' + car.vin + '">📍 Locating…</div>' : "") +
+        '<details class="monthdet"><summary>This month: ' + monthFace(car.month) + '</summary>' +
+        (detBody ? '<div>' + escapeHtml(detBody) + '</div>' : '') + '</details>' +
         (car.error ? '<div style="color:#e08a8a">' + escapeHtml(car.error) + '</div>' : "") +
       '</div>';
     wrap.appendChild(card);
@@ -388,8 +391,8 @@ function renderCards(cars) {
  * Raw lat/lon means nothing to a human, so each car card shows "Downtown
  * Tampa" style names. Results are cached in localStorage (keyed by rounded
  * coords) and the 3 cars' first-time lookups are staggered ~1.2s apart to
- * respect Nominatim's ~1 req/sec courtesy limit. Coords stay as a tiny
- * muted subtitle; raw coords are always the fallback. */
+ * respect Nominatim's ~1 req/sec courtesy limit. Coordinates are never shown
+ * on the page — only the friendly name, with "On the road" as fallback. */
 function areaKey(lat, lon) { return "tw_area_" + lat.toFixed(3) + "," + lon.toFixed(3); }
 function getAreaName(lat, lon) { return localStorage.getItem(areaKey(lat, lon)); }
 function setAreaName(lat, lon, name) {
@@ -416,23 +419,50 @@ async function reverseGeocode(lat, lon) {
     return name;
   } catch (e) { return null; }
 }
+/* Raw coordinates are NEVER rendered as text on the page — cards show only
+ * the human-readable area name. If a live lookup fails, fall back to the
+ * nearest previously-resolved area, then to "On the road". (Coords stay in
+ * the data layer where the map needs them.) */
 function enrichLocations(cars) {
   cars.forEach((car, i) => {
     if (car.lat === null || car.lon === null) return;
     const el = document.getElementById("loc-" + car.vin);
     if (!el) return;
-    const apply = (name) => {
-      if (!name) return;  // lookup failed or empty: keep the coords fallback
+    const setName = (name) => {
       const box = document.getElementById("loc-" + car.vin);
       if (!box) return;
-      box.innerHTML = "Location: <b>" + escapeHtml(name) + "</b> " +
-        '<span class="coords" title="' + car.lat.toFixed(4) + ", " + car.lon.toFixed(4) + '">' +
-        car.lat.toFixed(2) + ", " + car.lon.toFixed(2) + "</span>";
+      box.innerHTML = "📍 <b>" + escapeHtml(name) + "</b>";
     };
     const cached = getAreaName(car.lat, car.lon);
-    if (cached !== null) { if (cached) apply(cached); return; }
-    setTimeout(async () => { apply(await reverseGeocode(car.lat, car.lon)); }, i * 1200);
+    if (cached !== null) {
+      setName(cached || nearestCachedArea(car.lat, car.lon) || "On the road");
+      return;
+    }
+    setTimeout(async () => {
+      const name = await reverseGeocode(car.lat, car.lon);
+      setName(name || nearestCachedArea(car.lat, car.lon) || "On the road");
+    }, i * 1200);
   });
+}
+
+/* nearest previously-resolved area within 25 miles — a friendly fallback
+ * when a fresh reverse-geocode lookup fails */
+function nearestCachedArea(lat, lon) {
+  let best = null, bestD = 25;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || k.indexOf("tw_area_") !== 0) continue;
+      const parts = k.slice(8).split(",");
+      const la = parseFloat(parts[0]), lo = parseFloat(parts[1]);
+      if (isNaN(la) || isNaN(lo)) continue;
+      const name = localStorage.getItem(k);
+      if (!name) continue;
+      const d = haversineMiles(lat, lon, la, lo);
+      if (d < bestD) { bestD = d; best = name; }
+    }
+  } catch (e) { /* storage hiccup: fall through to "On the road" */ }
+  return best;
 }
 
 function escapeHtml(s) {
@@ -616,12 +646,8 @@ function isHomeSet() {
   return la !== null && lo !== null && !isNaN(la) && !isNaN(lo);
 }
 
-/* Fleet month-to-date totals footer: EV electricity cost vs the same miles
- * in a 15-mpg gas car. Rendered below the car cards. */
-function renderFleetFooter(cars) {
-  const el = document.getElementById("fleet");
-  if (!el) return;
-  const rate = store.rate, gas = store.gasPrice;
+/* Fleet month-to-date totals, shared math (testable without DOM) */
+function computeFleetTotals(cars, rate, gas) {
   let added = 0, miles = 0, any = false;
   for (const c of cars) {
     const m = c.month;
@@ -630,17 +656,34 @@ function renderFleetFooter(cars) {
     if (m.kwhAdded) added += m.kwhAdded;
     if (m.driveMiles) miles += m.driveMiles;
   }
-  if (!any) { el.innerHTML = ""; return; }
+  if (!any) return { any: false };
   const evCost = added * rate;
   const gasCost = miles / 15 * gas;
-  const saved = gasCost - evCost;
-  const savedTxt = saved >= 0
-    ? "You saved ~$" + saved.toFixed(2) + " vs gas"
-    : "Gas would have been ~$" + Math.abs(saved).toFixed(2) + " cheaper";
+  return { any: true, evCost, gasCost, saved: gasCost - evCost };
+}
+
+/* Thin month-totals strip under the header: ⚡ electricity (amber) ·
+ * ⛽ gas-car equivalent (orange) · 💰 saved (green). Savings over $25 get a
+ * glowing 🎉 pill as the exclamation point. */
+function renderFleetStrip(cars) {
+  const el = document.getElementById("fleetstrip");
+  if (!el) return;
+  const t = computeFleetTotals(cars, store.rate, store.gasPrice);
+  if (!t.any) { el.hidden = true; el.innerHTML = ""; return; }
+  let savedHtml;
+  if (t.saved > 25) {
+    savedHtml = '<span class="sv-pill">🎉 saved ~$' + t.saved.toFixed(2) + '</span>';
+  } else if (t.saved >= 0) {
+    savedHtml = '<span class="sv">💰 saved ~$' + t.saved.toFixed(2) + '</span>';
+  } else {
+    savedHtml = '<span class="svneg">💰 gas ~$' + Math.abs(t.saved).toFixed(2) + ' cheaper</span>';
+  }
   el.innerHTML =
-    '<div class="fleet-card">⚡ This month: <b>$' + evCost.toFixed(2) + "</b> electricity · " +
-    "⛽ Same miles in a 15-mpg gas car: <b>~$" + gasCost.toFixed(2) + "</b><br/>" +
-    '<span class="saved">' + savedTxt + "</span></div>";
+    '<span class="ev" title="Electricity this month">⚡ $' + t.evCost.toFixed(2) + '</span>' +
+    '<span class="sep">·</span>' +
+    '<span class="gas" title="Same miles in a 15-mpg gas car">⛽ ~$' + t.gasCost.toFixed(2) + '</span>' +
+    '<span class="sep">·</span>' + savedHtml;
+  el.hidden = false;
 }
 
 async function refresh() {
@@ -660,7 +703,7 @@ async function refresh() {
     const cars = await poll();
     renderCards(cars);
     renderMap(cars);
-    renderFleetFooter(cars);
+    renderFleetStrip(cars);
     if (needHomeNudge && !isHomeSet()) {
       errBox.hidden = false;
       errBox.textContent = "Set your home location in Settings (address lookup or pick on map).";

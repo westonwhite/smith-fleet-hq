@@ -1,4 +1,4 @@
-<!-- Smith Robotaxi HQ build 2026-10-07 v10 -->
+<!-- Smith Robotaxi HQ build 2026-10-07 v11 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,11 +11,28 @@
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
          font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif; }
-  header { display:flex; align-items:center; gap:8px; padding:12px 14px 4px; }
-  header h1 { font-size:20px; margin:0; flex:1; }
+  header { display:flex; align-items:center; gap:8px; padding:10px 14px 2px; }
+  header h1 { font-size:18px; margin:0; flex:1; }
   header button { background:#262b33; color:var(--fg); border:1px solid #333a44;
-                  border-radius:10px; font-size:16px; padding:6px 10px; }
-  #updated { color:var(--faint); font-size:11px; text-align:right; padding:2px 14px 0; }
+                  border-radius:10px; font-size:15px; padding:5px 9px; }
+  #updated { color:var(--faint); font-size:10px; text-align:right; padding:2px 14px 0; }
+  /* thin month-totals strip right under the title: one slim line, color-coded */
+  #fleetstrip { margin:6px 12px 0; padding:5px 10px; background:#101216;
+                border:1px solid #2a2f37; border-radius:10px; font-size:12px;
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; }
+  #fleetstrip .ev { color:#ffcc00; font-weight:700; }
+  #fleetstrip .gas { color:#ff9f43; font-weight:700; }
+  #fleetstrip .sv { color:#34c759; font-weight:700; }
+  #fleetstrip .svneg { color:#ff9f43; font-weight:700; }
+  #fleetstrip .sep { color:#3a4048; margin:0 6px; }
+  #fleetstrip .sv-pill { display:inline-block; background:rgba(52,199,89,.18);
+                border:1px solid #34c759; color:#7ee2a0; border-radius:999px;
+                padding:1px 9px; font-weight:700;
+                animation:svglow 2.2s ease-in-out infinite; }
+  @keyframes svglow {
+    0%,100% { box-shadow:0 0 6px rgba(52,199,89,.40); }
+    50%     { box-shadow:0 0 14px rgba(52,199,89,.80); }
+  }
   #settings { margin:10px 14px 0; padding:12px; background:var(--card);
               border:1px solid #2a2f37; border-radius:12px; }
   #settings label { display:block; font-size:12px; color:var(--muted); margin:8px 0 2px; }
@@ -24,18 +41,19 @@
   #settings button { margin-top:10px; width:100%; padding:10px; border-radius:10px;
                      border:none; background:var(--accent); color:#06121f;
                      font-size:15px; font-weight:700; }
-  #cards { padding:10px 14px 0; display:flex; flex-direction:column; gap:10px; }
-  .card { background:var(--card); border:1px solid #2a2f37; border-radius:14px; padding:12px; }
-  .card-top { display:flex; align-items:center; gap:10px; }
-  .card-top canvas { width:120px; height:50px; border-radius:8px; flex:none; }
-  .name { font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  #cards { padding:8px 12px 0; display:flex; flex-direction:column; gap:8px; }
+  .card { background:var(--card); border:1px solid #2a2f37; border-radius:12px; padding:8px 10px; }
+  .card-top { display:flex; align-items:center; gap:8px; }
+  .card-top canvas { width:110px; height:46px; border-radius:8px; flex:none; }
+  .name { font-size:15px; font-weight:700; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .fsd-chip { font-size:10px; font-weight:700; color:#8fd3ff; background:#1c3a54;
               border:1px solid #2e5a82; border-radius:8px; padding:2px 7px; }
-  .statusline { color:var(--muted); font-size:13px; margin-top:3px; }
-  .details { margin-top:8px; font-size:13px; color:var(--muted); display:grid; gap:2px; }
+  .statusline { color:var(--muted); font-size:12px; margin-top:2px; }
+  .statusline.np { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:54vw; }
+  .details { margin-top:6px; font-size:12px; color:var(--muted); display:grid; gap:1px; }
   .details b { color:var(--fg); font-weight:600; }
   .err { color:#e08a8a; font-size:13px; padding:10px 14px; }
-  #map { height:340px; margin:12px 14px 20px; border-radius:14px; border:1px solid #2a2f37; position:relative; }
+  #map { height:320px; margin:10px 12px 16px; border-radius:14px; border:1px solid #2a2f37; position:relative; }
   .car-photo-icon { background:none !important; border:none !important; }
   .mapctl { position:absolute; top:10px; right:10px; z-index:1000; display:flex; flex-direction:column; gap:6px; }
   .mapctl button { background:rgba(255,255,255,.92); border:1px solid #999; border-radius:8px;
@@ -48,23 +66,17 @@
   #pickbar button.cancel { background:#555; }
   #lookupResult { font-size:13px; color:var(--muted); margin-top:6px; }
   #useAddrBtn { background:#2e7d32 !important; }
-  .coords { font-size:11px; color:var(--faint); }
-  .fsd-badge { display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:700;
+  .fsd-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700;
                color:#fff; background:rgba(46,155,255,.16); border:1px solid #2E9BFF;
-               border-radius:8px; padding:2px 8px; vertical-align:1px;
+               border-radius:8px; padding:1px 7px; vertical-align:1px;
                animation:fsdpulse 2.6s ease-in-out infinite; }
   @keyframes fsdpulse {
     0%,100% { box-shadow:0 0 5px rgba(46,155,255,.30); }
     50%     { box-shadow:0 0 13px rgba(46,155,255,.65); }
   }
-  .monthdet summary { cursor:pointer; list-style:none; }
+  .monthdet summary { cursor:pointer; list-style:none; font-size:12px; }
   .monthdet summary::-webkit-details-marker { display:none; }
-  .monthdet > div { font-size:12px; color:var(--muted); margin-top:4px; }
-  #fleet { padding:0 14px; }
-  .fleet-card { background:#17251c; border:1px solid #2e5a3a; border-radius:14px;
-                padding:12px; font-size:13px; color:var(--muted); line-height:1.7; }
-  .fleet-card b { color:var(--fg); }
-  .fleet-card .saved { color:#7ee2a0; font-weight:700; font-size:14px; }
+  .monthdet > div { font-size:11px; color:var(--muted); margin-top:3px; line-height:1.5; }
 </style>
 </head>
 <body>
@@ -73,6 +85,7 @@
   <button id="refreshBtn" title="Refresh">↻</button>
   <button id="settingsBtn" title="Settings">⚙</button>
 </header>
+<div id="fleetstrip" hidden></div>
 <div id="updated"></div>
 
 <section id="settings" hidden>
@@ -97,7 +110,6 @@
 
 <div id="err" class="err" hidden></div>
 <div id="cards"></div>
-<div id="fleet"></div>
 <div id="map">
   <div id="pickbar" hidden>
     <button id="pickOkBtn">Confirm home</button>
@@ -106,6 +118,6 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=20261007v10"></script>
+<script src="app.js?v=20261007v11"></script>
 </body>
 </html>
