@@ -1,4 +1,4 @@
-<!-- Smith Robotaxi HQ build 2026-10-07 v14 -->
+<!-- Smith Robotaxi HQ build 2026-10-07 v15 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,7 +24,7 @@
   .batt-g { color:#34c759; font-weight:700; }
   .batt-y { color:#ffcc00; font-weight:700; }
   .batt-r { color:#ff3b30; font-weight:700; }
-  #fleetstrip .ev { color:#ffcc00; font-weight:700; }
+  #fleetstrip .ev { color:#34c759; font-weight:700; }
   #fleetstrip .gas { color:#ff9f43; font-weight:700; }
   #fleetstrip .sv { color:#34c759; font-weight:700; }
   #fleetstrip .svneg { color:#ff9f43; font-weight:700; }
@@ -95,7 +95,7 @@
 <section id="settings" hidden>
   <label>Tessie API token (generate at dash.tessie.com/settings/api)</label>
   <input id="tokenInput" type="text" placeholder="paste token here" autocomplete="off" spellcheck="false"/>
-  <label>Electricity rate ($/kWh) — used for the month charging-cost estimate</label>
+  <label>Electricity rate ($/kWh) — used for the month energy-cost estimate</label>
   <input id="rateInput" type="text" inputmode="decimal" placeholder="0.18"/>
   <label>Gas price ($/gal) — AAA national avg, Oct 2026</label>
   <input id="gasInput" type="text" inputmode="decimal" placeholder="4.37"/>
@@ -105,6 +105,7 @@
   <div id="lookupResult"></div>
   <button id="useAddrBtn" hidden>Use this address</button>
   <button id="pickMapBtn" style="margin-top:8px; background:#2e5a82">Pick on map</button>
+  <div id="homeLine" style="font-size:13px; margin-top:8px; color:#8e8e93;"></div>
   <label>Home latitude (manual fallback)</label>
   <input id="latInput" type="text" inputmode="decimal"/>
   <label>Home longitude (manual fallback)</label>
@@ -122,6 +123,6 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=20261007v14"></script>
+<script src="app.js?v=20261007v15"></script>
 </body>
 </html>

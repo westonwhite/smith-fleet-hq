@@ -34,12 +34,19 @@ const store = {
   /* gas price for the fleet "vs gas car" comparison; AAA national avg Oct 2026 */
   get gasPrice() { const v = parseFloat(localStorage.getItem("tw_gas")); return isNaN(v) ? 4.37 : v; },
   set gasPrice(v) { localStorage.setItem("tw_gas", String(v)); },
-  /* null until the user sets home (address lookup / pick on map / manual) */
+  /* null until the user sets home (address lookup / pick on map / manual).
+   * homeLabel is the human-readable address ("123 Main St, Tampa, FL") so
+   * Settings can show what's saved. Pass label===undefined to leave it alone. */
   get homeLat() { const v = localStorage.getItem("tw_home_lat"); return v === null ? null : parseFloat(v); },
   get homeLon() { const v = localStorage.getItem("tw_home_lon"); return v === null ? null : parseFloat(v); },
-  setHome(la, lo) {
+  get homeLabel() { return localStorage.getItem("tw_home_label") || ""; },
+  setHome(la, lo, label) {
     localStorage.setItem("tw_home_lat", String(la));
     localStorage.setItem("tw_home_lon", String(lo));
+    if (label !== undefined) {
+      if (label) localStorage.setItem("tw_home_label", label);
+      else localStorage.removeItem("tw_home_label");
+    }
   },
   dist(vin)     { const v = localStorage.getItem("tw_dist_" + vin); return v === null ? null : parseFloat(v); },
   setDist(vin, d) {
@@ -155,7 +162,9 @@ function computeMonth(drives, charges, rate) {
     autopilotPct,
     kwhAdded,
     kwhUsed,
-    estCost: kwhAdded !== null ? kwhAdded * rate : null,
+    /* cost is based on DRIVING energy (always present when the car drove),
+     * not charge sessions (a car can drive all month without a logged charge) */
+    estCost: kwhUsed !== null ? kwhUsed * rate : null,
     hasData: md.length > 0 || mc.length > 0,
     driveMiles: totalMi,
   };
@@ -285,8 +294,8 @@ function monthFace(m) {
   if (!m || !m.hasData) return "No drives yet this month";
   const face = [];
   if (m.autopilotPct !== null) face.push(fsdBadge(m.autopilotPct));
-  if (m.kwhAdded !== null) {
-    face.push("Energy consumed: <b>" + m.kwhAdded.toFixed(0) + " kWh (~$" +
+  if (m.kwhUsed !== null) {
+    face.push("Energy consumed: <b>" + m.kwhUsed.toFixed(0) + " kWh (~$" +
       (m.estCost !== null ? m.estCost.toFixed(2) : "?") + ")</b>");
   }
   return face.length ? face.join(" · ") : "No drives yet this month";
@@ -673,7 +682,7 @@ function renderMap(cars) {
   if (hLat !== null && hLon !== null) {
     const home = L.circleMarker([hLat, hLon],
       { radius: 8, color: "#2e7d32", fillColor: "#66bb6a", fillOpacity: 0.9, weight: 2 });
-    home.bindPopup("<b>Home</b><br/>Home base");
+    home.bindPopup("<b>Home</b>" + (store.homeLabel ? "<br/>" + escapeHtml(store.homeLabel) : ""));
     carLayer.addLayer(home);
     bounds.push([hLat, hLon]);
   }
@@ -775,18 +784,36 @@ function isHomeSet() {
   return la !== null && lo !== null && !isNaN(la) && !isNaN(lo);
 }
 
-/* Fleet month-to-date totals, shared math (testable without DOM) */
+/* Shows the currently-saved home in Settings so it's obvious it persisted
+ * across reloads ("Home saved ✓ — 123 Main St, Tampa, FL"). */
+function refreshHomeLine() {
+  const el = document.getElementById("homeLine");
+  if (!el) return;
+  if (isHomeSet()) {
+    const lbl = store.homeLabel;
+    el.textContent = "Home saved ✓" + (lbl ? " — " + lbl : "");
+    el.style.color = "#7ee2a0";
+  } else {
+    el.textContent = "Home not set yet.";
+    el.style.color = "#8e8e93";
+  }
+}
+
+/* Fleet month-to-date totals, shared math (testable without DOM).
+ * Electricity is based on DRIVING energy summed across cars — always present
+ * when a car drove (charge sessions can be missing entirely, e.g. Miracle
+ * Whip drove 50.8 mi on 10.1 kWh with zero logged charges). */
 function computeFleetTotals(cars, rate, gas) {
-  let added = 0, miles = 0, any = false;
+  let kwh = 0, miles = 0, any = false;
   for (const c of cars) {
     const m = c.month;
     if (!m || !m.hasData) continue;
     any = true;
-    if (m.kwhAdded) added += m.kwhAdded;
+    if (m.kwhUsed) kwh += m.kwhUsed;
     if (m.driveMiles) miles += m.driveMiles;
   }
   if (!any) return { any: false };
-  const evCost = added * rate;
+  const evCost = kwh * rate;
   const gasCost = miles / 15 * gas;
   return { any: true, evCost, gasCost, saved: gasCost - evCost };
 }
@@ -796,7 +823,7 @@ function computeFleetTotals(cars, rate, gas) {
  * glowing 🎉 pill as the exclamation point. */
 function monthLabel() {
   const d = new Date();
-  return d.toLocaleString("en-US", { month: "short" }) + " " + d.getFullYear();
+  return d.toLocaleString("en-US", { month: "long" });
 }
 function renderFleetStrip(cars) {
   const el = document.getElementById("fleetstrip");
@@ -805,18 +832,18 @@ function renderFleetStrip(cars) {
   if (!t.any) { el.hidden = true; el.innerHTML = ""; return; }
   let savedHtml;
   if (t.saved > 25) {
-    savedHtml = '<span class="sv-pill">🎉 saved ~$' + t.saved.toFixed(2) + '</span>';
+    savedHtml = '<span class="sv-pill">saved ~$' + t.saved.toFixed(2) + '</span>';
   } else if (t.saved >= 0) {
-    savedHtml = '<span class="sv">💰 saved ~$' + t.saved.toFixed(2) + '</span>';
+    savedHtml = '<span class="sv">saved ~$' + t.saved.toFixed(2) + '</span>';
   } else {
-    savedHtml = '<span class="svneg">💰 gas ~$' + Math.abs(t.saved).toFixed(2) + ' cheaper</span>';
+    savedHtml = '<span class="svneg">gas ~$' + Math.abs(t.saved).toFixed(2) + ' cheaper</span>';
   }
   el.innerHTML =
-    '<span class="win">' + monthLabel() + ' · month to date</span>' +
-    '<span class="ev" title="Electricity this month">⚡ $' + t.evCost.toFixed(2) + '</span>' +
+    '<span class="win">' + monthLabel() + ' · month to date: </span>' +
+    '<span class="ev" title="Electricity this month: driving energy × your $/kWh rate">⚡ $' + t.evCost.toFixed(2) + ' electricity</span>' +
     '<span class="sep">·</span>' +
-    '<span class="gas" title="Same miles in a 15-mpg gas car">⛽ ~$' + t.gasCost.toFixed(2) + '</span>' +
-    '<span class="sep">·</span>' + savedHtml;
+    '<span class="gas" title="Same miles in a 15-mpg gas car">⛽ ~$' + t.gasCost.toFixed(2) + ' in a 15-mpg gas car</span>' +
+    '<span class="sep">—</span>' + savedHtml;
   el.hidden = false;
 }
 
@@ -861,6 +888,7 @@ function initSettings() {
   document.getElementById("lonInput").value = localStorage.getItem("tw_home_lon") || "";
   document.getElementById("latInput").placeholder = "e.g. 28.1397";
   document.getElementById("lonInput").placeholder = "e.g. -82.7324";
+  refreshHomeLine();
 
   document.getElementById("saveBtn").addEventListener("click", () => {
     store.token = document.getElementById("tokenInput").value.trim();
@@ -870,7 +898,13 @@ function initSettings() {
     if (!isNaN(gp) && gp > 0) store.gasPrice = gp;
     const la = parseFloat(document.getElementById("latInput").value);
     const lo = parseFloat(document.getElementById("lonInput").value);
-    if (!isNaN(la) && !isNaN(lo)) store.setHome(la, lo);
+    if (!isNaN(la) && !isNaN(lo)) {
+      store.setHome(la, lo, "");  /* clear any stale label; lookup below sets a fresh one */
+      refreshHomeLine();
+      reverseGeocode(la, lo).then(name => {
+        if (name) { store.setHome(la, lo, name); refreshHomeLine(); }
+      });
+    }
     sec.hidden = true;
     refresh();
   });
@@ -891,7 +925,7 @@ function initSettings() {
         encodeURIComponent(q));
       const arr = await r.json();
       if (!arr.length) { res.textContent = "No match — try more detail (street, city, state)."; return; }
-      lookupHit = { lat: parseFloat(arr[0].lat), lon: parseFloat(arr[0].lon) };
+      lookupHit = { lat: parseFloat(arr[0].lat), lon: parseFloat(arr[0].lon), label: arr[0].display_name };
       res.textContent = arr[0].display_name;
       useBtn.hidden = false;
     } catch (e) {
@@ -900,10 +934,14 @@ function initSettings() {
   });
   document.getElementById("useAddrBtn").addEventListener("click", () => {
     if (!lookupHit) return;
+    /* Persist immediately — don't depend on the user also tapping Save. */
+    store.setHome(lookupHit.lat, lookupHit.lon, lookupHit.label);
     document.getElementById("latInput").value = lookupHit.lat;
     document.getElementById("lonInput").value = lookupHit.lon;
-    document.getElementById("lookupResult").textContent = "Home set — tap Save to keep it.";
+    document.getElementById("lookupResult").textContent = "Home saved ✓";
     document.getElementById("useAddrBtn").hidden = true;
+    refreshHomeLine();
+    refresh();
   });
 
   /* pick on map */
@@ -915,9 +953,14 @@ function initSettings() {
   document.getElementById("pickOkBtn").addEventListener("click", () => {
     if (pickMarker) {
       const p = pickMarker.getLatLng();
-      store.setHome(p.lat, p.lng);
+      store.setHome(p.lat, p.lng, "Picked on map");
       document.getElementById("latInput").value = p.lat;
       document.getElementById("lonInput").value = p.lng;
+      refreshHomeLine();
+      /* swap in a friendly area name for the picked point when it resolves */
+      reverseGeocode(p.lat, p.lng).then(name => {
+        if (name) { store.setHome(p.lat, p.lng, name); refreshHomeLine(); }
+      });
     }
     setPickMode(false);
     refresh();
