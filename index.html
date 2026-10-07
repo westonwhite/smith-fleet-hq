@@ -1,3 +1,4 @@
+<!-- Smith Robotaxi HQ build 2026-10-07 v9 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -59,7 +60,9 @@
 
 <section id="settings" hidden>
   <label>Tessie API token (generate at dash.tessie.com/settings/api)</label>
-  <input id="tokenInput" type="password" placeholder="paste token here" autocomplete="off"/>
+  <input id="tokenInput" type="text" placeholder="paste token here" autocomplete="off" spellcheck="false"/>
+  <label>Electricity rate ($/kWh) — used for the month charging-cost estimate</label>
+  <input id="rateInput" type="text" inputmode="decimal" placeholder="0.18"/>
   <label>Home location — type an address, or pick a point on the map</label>
   <input id="addrInput" type="text" placeholder="123 Main St, Tampa, FL" autocomplete="off"/>
   <button id="lookupBtn" style="margin-top:8px">Look up address</button>

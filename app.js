@@ -29,6 +29,8 @@ const WHEEL_SPECS = {
 const store = {
   get token()   { return localStorage.getItem("tw_token") || ""; },
   set token(v)  { localStorage.setItem("tw_token", v); },
+  get rate()    { const v = parseFloat(localStorage.getItem("tw_rate")); return isNaN(v) ? 0.18 : v; },
+  set rate(v)   { localStorage.setItem("tw_rate", String(v)); },
   /* null until the user sets home (address lookup / pick on map / manual) */
   get homeLat() { const v = localStorage.getItem("tw_home_lat"); return v === null ? null : parseFloat(v); },
   get homeLon() { const v = localStorage.getItem("tw_home_lon"); return v === null ? null : parseFloat(v); },
@@ -95,15 +97,60 @@ async function getDrives(vin) {
   if (c && Date.now() - c.ts < 15 * 60 * 1000) return c.drives;
   let drives = [];
   try {
-    const d = await tessie("/" + vin + "/drives?limit=50");
+    const d = await tessie("/" + vin + "/drives?limit=200");
     drives = (d.results || []).map(x => ({
       startedAt: x.started_at || 0,
       dist: x.odometer_distance || 0,
       kwh: x.energy_used || 0,
+      ap: x.autopilot_distance || 0,
     }));
     drivesCache[vin] = { ts: Date.now(), drives };
   } catch (e) { drives = (c && c.drives) || []; }
   return drives;
+}
+
+/* charges cache: same 15-min TTL */
+const chargesCache = {};
+async function getCharges(vin) {
+  const c = chargesCache[vin];
+  if (c && Date.now() - c.ts < 15 * 60 * 1000) return c.charges;
+  let charges = [];
+  try {
+    const d = await tessie("/" + vin + "/charges?limit=200");
+    charges = (d.results || []).map(x => ({
+      startedAt: x.started_at || 0,
+      added: x.energy_added || 0,
+      cost: (x.cost === null || x.cost === undefined) ? null : x.cost,
+    }));
+    chargesCache[vin] = { ts: Date.now(), charges };
+  } catch (e) { charges = (c && c.charges) || []; }
+  return charges;
+}
+
+/* first of the current month, browser-local, epoch seconds */
+function monthStartSecs() {
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), 1).getTime() / 1000;
+}
+
+/* Month-to-date: Autopilot/FSD % (Tesla's autopilot_distance includes FSD —
+   the API can't split basic AP from FSD), kWh charged + est. cost, kWh used. */
+function computeMonth(drives, charges, rate) {
+  const start = monthStartSecs();
+  const md = drives.filter(d => d.startedAt >= start && d.dist > 0);
+  const totalMi = md.reduce((s, d) => s + d.dist, 0);
+  const autopilotPct = totalMi > 0
+    ? md.reduce((s, d) => s + Math.min(d.ap, d.dist), 0) / totalMi * 100 : null;
+  const mc = charges.filter(c => c.startedAt >= start && c.added > 0);
+  const kwhAdded = mc.length ? mc.reduce((s, c) => s + c.added, 0) : null;
+  const kwhUsed = md.length ? md.reduce((s, d) => s + d.kwh, 0) : null;
+  return {
+    autopilotPct,
+    kwhAdded,
+    kwhUsed,
+    estCost: kwhAdded !== null ? kwhAdded * rate : null,
+    hasData: md.length > 0 || mc.length > 0,
+  };
 }
 
 function computeStats(drives, odometer, lifetimeChargedKwh) {
@@ -123,12 +170,13 @@ async function poll() {
     let raw = null;
     try { raw = await tessie("/" + kc.vin + "/state"); } catch (e) { raw = null; }
     const drives = await getDrives(kc.vin);
-    cars.push(buildCar(kc, raw, drives));
+    const charges = await getCharges(kc.vin);
+    cars.push(buildCar(kc, raw, drives, charges));
   }
   return cars;
 }
 
-function buildCar(kc, raw, drives) {
+function buildCar(kc, raw, drives, charges) {
   const cs = (raw && raw.charge_state) || {};
   const ds = (raw && raw.drive_state) || {};
   const vs = (raw && raw.vehicle_state) || {};
@@ -164,11 +212,12 @@ function buildCar(kc, raw, drives) {
     num(vs, "odometer"),
     num(cs, "lifetime_energy_charged")
   );
+  const month = computeMonth(drives || [], charges || [], store.rate);
   return {
     vin: kc.vin, name: kc.name, img: kc.img, imgMap: kc.imgMap,
     batteryPct, chargingState, driving, speedMph, headingDeg,
     compass: headingDeg !== null ? compass8(headingDeg) : null,
-    lat, lon, miles, trend: tr, nowPlaying, stats,
+    lat, lon, miles, trend: tr, nowPlaying, stats, month,
     error: raw ? null : "No state from Tessie",
   };
 }
@@ -195,6 +244,19 @@ function statsText(c) {
   if (s.odometer !== null) parts.push(Math.round(s.odometer).toLocaleString() + " mi odo");
   if (s.lifetimeChargedKwh !== null) parts.push(Math.round(s.lifetimeChargedKwh).toLocaleString() + " kWh charged");
   return parts.length ? parts.join(" · ") : null;
+}
+
+/* "62% Autopilot/FSD · 84 kWh in ($15.12) · 76 kWh used" */
+function monthText(m) {
+  if (!m || !m.hasData) return "No drives yet this month";
+  const parts = [];
+  if (m.autopilotPct !== null) parts.push(m.autopilotPct.toFixed(0) + "% Autopilot/FSD");
+  if (m.kwhAdded !== null) {
+    parts.push(m.kwhAdded.toFixed(0) + " kWh in" +
+      (m.estCost !== null ? " ($" + m.estCost.toFixed(2) + ")" : ""));
+  }
+  if (m.kwhUsed !== null) parts.push(m.kwhUsed.toFixed(0) + " kWh used");
+  return parts.length ? parts.join(" · ") : "No drives yet this month";
 }
 
 /* ---------- car photo canvases with spinning wheels ---------- */
@@ -271,6 +333,7 @@ function renderCards(cars) {
     const batt = batteryText(car);
     const dist = distanceText(car);
     const stats = statsText(car);
+    const month = monthText(car.month);
     card.innerHTML =
       '<div class="card-top">' +
         '<canvas width="360" height="150" data-vin="' + car.vin + '"></canvas>' +
@@ -287,6 +350,7 @@ function renderCards(cars) {
         (car.lat !== null && car.lon !== null
           ? '<div>Location: <b>' + car.lat.toFixed(4) + ", " + car.lon.toFixed(4) + '</b></div>' : "") +
         (stats ? '<div>Stats: <b>' + escapeHtml(stats) + '</b></div>' : "") +
+        '<div>This month: <b>' + escapeHtml(month) + '</b></div>' +
         (car.error ? '<div style="color:#e08a8a">' + escapeHtml(car.error) + '</div>' : "") +
       '</div>';
     wrap.appendChild(card);
@@ -497,6 +561,7 @@ function initSettings() {
     sec.hidden = !sec.hidden;
   });
   document.getElementById("tokenInput").value = store.token;
+  document.getElementById("rateInput").value = String(store.rate);
   document.getElementById("latInput").value = localStorage.getItem("tw_home_lat") || "";
   document.getElementById("lonInput").value = localStorage.getItem("tw_home_lon") || "";
   document.getElementById("latInput").placeholder = "e.g. 28.1397";
@@ -504,6 +569,8 @@ function initSettings() {
 
   document.getElementById("saveBtn").addEventListener("click", () => {
     store.token = document.getElementById("tokenInput").value.trim();
+    const r = parseFloat(document.getElementById("rateInput").value);
+    if (!isNaN(r) && r >= 0) store.rate = r;
     const la = parseFloat(document.getElementById("latInput").value);
     const lo = parseFloat(document.getElementById("lonInput").value);
     if (!isNaN(la) && !isNaN(lo)) store.setHome(la, lo);
