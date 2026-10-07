@@ -230,6 +230,18 @@ function batteryText(c) {
   if (c.batteryPct === null) return null;
   return c.chargingState === "Charging" ? "⚡Charging " + c.batteryPct + "%" : c.batteryPct + "%";
 }
+/* Color-coded battery % text: green ≥50, yellow 30–49, red <30. */
+function batteryClass(c) {
+  if (c.batteryPct === null) return null;
+  if (c.batteryPct < 30) return "batt-r";
+  if (c.batteryPct < 50) return "batt-y";
+  return "batt-g";
+}
+function batteryHtml(c) {
+  const t = batteryText(c), cls = batteryClass(c);
+  if (!t || !cls) return "";
+  return '<span class="' + cls + '">' + escapeHtml(t) + "</span>";
+}
 function statusText(c) {
   if (!c.driving) return "Parked";
   return "Driving" + (c.speedMph !== null ? " " + c.speedMph + " mph" : "") +
@@ -356,10 +368,11 @@ function renderCards(cars) {
   for (const car of cars) {
     const card = document.createElement("div");
     card.className = "card";
-    const batt = batteryText(car);
+    const battH = batteryHtml(car);
     const dist = distanceText(car);
     const stats = statsText(car);
-    const statusBits = [batt, statusText(car), dist].filter(Boolean);
+    const statusBits = [statusText(car), dist].filter(Boolean).map(escapeHtml);
+    if (battH) statusBits.unshift(battH);
     const detBody = [monthDetailText(car.month), stats].filter(Boolean).join(" · ");
     card.innerHTML =
       '<div class="card-top">' +
@@ -367,7 +380,7 @@ function renderCards(cars) {
         '<div><div class="name">' + escapeHtml(car.name) +
           (FSD_VINS.has(car.vin) ? ' <span class="fsd-chip">FSD</span>' : '') +
         '</div>' +
-        '<div class="statusline">' + escapeHtml(statusBits.join(" · ")) + '</div>' +
+        '<div class="statusline">' + statusBits.join(" · ") + '</div>' +
         (car.nowPlaying ? '<div class="statusline np">♪ ' + escapeHtml(car.nowPlaying) + '</div>' : '') +
         '</div>' +
       '</div>' +
@@ -580,9 +593,12 @@ function renderMap(cars) {
 
   for (const it of spread) {
     const car = it.car;
-    const detail = [batteryText(car), statusText(car),
+    const battH = batteryHtml(car);
+    const detailBits = [statusText(car),
         car.nowPlaying ? "♪ " + car.nowPlaying : null, distanceText(car)]
-      .filter(Boolean).join(" · ") + (it.stale ? " · last seen" : "");
+      .filter(Boolean).map(escapeHtml);
+    if (battH) detailBits.unshift(battH);
+    const detail = detailBits.join(" · ") + (it.stale ? " · last seen" : "");
     const img = carMapImages[car.vin];
     let mk;
     if (img && img.naturalWidth) {
@@ -600,7 +616,7 @@ function renderMap(cars) {
       mk = L.circleMarker([it.lat, it.lon],
         { radius: 10, color: "#0d47a1", fillColor: "#42a5f5", fillOpacity: 0.9, weight: 2 });
     }
-    mk.bindPopup("<b>" + escapeHtml(car.name) + "</b><br/>" + escapeHtml(detail));
+    mk.bindPopup("<b>" + escapeHtml(car.name) + "</b><br/>" + detail);
     carLayer.addLayer(mk);
     bounds.push([it.lat, it.lon]);
   }
