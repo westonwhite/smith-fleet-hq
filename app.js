@@ -570,7 +570,7 @@ function loadRadar() {
         /* RainViewer radar tiles only exist for zoom 0-7 (z8+ returns a
          * "zoom level not supported" tile). maxNativeZoom: 7 makes Leaflet
          * upscale the z7 tiles at closer zooms instead of requesting z8+. */
-        radarLayer = L.tileLayer(url, { opacity: 0.35, zIndex: 10, maxNativeZoom: 7,
+        radarLayer = L.tileLayer(url, { opacity: 0.45, zIndex: 10, maxNativeZoom: 7,
           attribution: 'Radar &copy; <a href="https://www.rainviewer.com/">RainViewer</a>' });
         if (radarOn) radarLayer.addTo(map);
         if (mapCtl && mapCtl._paint) mapCtl._paint();
