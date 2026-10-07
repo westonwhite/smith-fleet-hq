@@ -22,8 +22,8 @@ const FSD_VINS = new Set([
  * Photos face right (nose at +x). */
 const WHEEL_SPECS = {
   "5YJ3E1EA2JF051492": [{ cx: 0.806, cy: 0.722, r: 0.077 }, { cx: 0.199, cy: 0.724, r: 0.075 }],
-  "5YJ3E1EA7JF015751": [{ cx: 0.769, cy: 0.780, r: 0.064 }, { cx: 0.240, cy: 0.780, r: 0.064 }],
-  "5YJ3E1EA9SF060398": [{ cx: 0.792, cy: 0.750, r: 0.072 }, { cx: 0.219, cy: 0.751, r: 0.069 }],
+  "5YJ3E1EA7JF015751": [{ cx: 0.795, cy: 0.605, r: 0.058 }, { cx: 0.184, cy: 0.610, r: 0.058 }],
+  "5YJ3E1EA9SF060398": [{ cx: 0.815, cy: 0.758, r: 0.055 }, { cx: 0.220, cy: 0.760, r: 0.057 }],
 };
 
 const store = {
@@ -106,6 +106,10 @@ async function getDrives(vin) {
       dist: x.odometer_distance || 0,
       kwh: x.energy_used || 0,
       ap: x.autopilot_distance || 0,
+      sLat: (x.starting_latitude === null || x.starting_latitude === undefined) ? null : x.starting_latitude,
+      sLon: (x.starting_longitude === null || x.starting_longitude === undefined) ? null : x.starting_longitude,
+      eLat: (x.ending_latitude === null || x.ending_latitude === undefined) ? null : x.ending_latitude,
+      eLon: (x.ending_longitude === null || x.ending_longitude === undefined) ? null : x.ending_longitude,
     }));
     drivesCache[vin] = { ts: Date.now(), drives };
   } catch (e) { drives = (c && c.drives) || []; }
@@ -503,6 +507,8 @@ function initMap() {
   });
   satelliteLayer.addTo(map);  /* satellite is the default base layer */
   carLayer = L.layerGroup().addTo(map);
+  routeLayer = L.layerGroup();
+  if (routesOn) routeLayer.addTo(map);
   buildMapCtl();
   loadRadar();
   setInterval(loadRadar, 10 * 60 * 1000);
@@ -513,16 +519,26 @@ function buildMapCtl() {
   const bS = L.DomUtil.create("button", "", mapCtl); bS.textContent = "Streets";
   const bT = L.DomUtil.create("button", "", mapCtl); bT.textContent = "Satellite";
   const bR = L.DomUtil.create("button", "", mapCtl); bR.textContent = "Radar";
+  const bRt = L.DomUtil.create("button", "", mapCtl); bRt.textContent = "Routes";
+  bRt.title = "Today's drive routes — road-following approximations, not exact GPS";
   const paint = () => {
     bS.className = map.hasLayer(streetsLayer) ? "active" : "";
     bT.className = map.hasLayer(satelliteLayer) ? "active" : "";
     bR.className = (radarOn && radarLayer) ? "active" : "";
+    bRt.className = routesOn ? "active" : "";
   };
   bS.onclick = () => { map.removeLayer(satelliteLayer); streetsLayer.addTo(map); paint(); };
   bT.onclick = () => { map.removeLayer(streetsLayer); satelliteLayer.addTo(map); paint(); };
   bR.onclick = () => {
     radarOn = !radarOn;
     if (radarLayer) { if (radarOn) radarLayer.addTo(map); else map.removeLayer(radarLayer); }
+    paint();
+  };
+  bRt.onclick = () => {
+    routesOn = !routesOn;
+    try { localStorage.setItem("tw_routes_on", routesOn ? "1" : "0"); } catch (e) {}
+    if (routeLayer) { if (routesOn) routeLayer.addTo(map); else map.removeLayer(routeLayer); }
+    if (routesOn) updateRoutes(carsCache);
     paint();
   };
   L.DomEvent.disableClickPropagation(mapCtl);
@@ -551,6 +567,103 @@ function loadRadar() {
         if (mapCtl && mapCtl._paint) mapCtl._paint();
       }
     }).catch(() => {});
+}
+
+/* ---------- today's route lines (OSRM road-following approximations) ----------
+ * Tessie has no GPS breadcrumbs, so each of today's drives is re-routed along
+ * roads between its start/end points via the free OSRM demo server. These are
+ * approximations of the path driven, NOT the car's exact GPS track. */
+const ROUTE_COLORS = {
+  "5YJ3E1EA2JF051492": "#64d2ff",  /* Caroline's whip — blue */
+  "5YJ3E1EA7JF015751": "#ff9f0a",  /* The Starship — orange */
+  "5YJ3E1EA9SF060398": "#bf5af2",  /* Miracle Whip — purple */
+};
+let routeLayer = null;
+let routesOn = true;
+try { routesOn = (localStorage.getItem("tw_routes_on") || "1") === "1"; } catch (e) {}
+let routeQueue = [];
+let routeTimer = null;
+let routeGen = 0;
+
+function routeCacheKey(vin, sLat, sLon, eLat, eLon) {
+  return [vin, sLat.toFixed(4), sLon.toFixed(4), eLat.toFixed(4), eLon.toFixed(4)].join("|");
+}
+function getRouteCache() {
+  try { return JSON.parse(localStorage.getItem("tw_routes") || "{}"); }
+  catch (e) { return {}; }
+}
+function setRouteCache(obj) {
+  try {
+    const keys = Object.keys(obj);
+    if (keys.length > 150) {
+      const drop = keys.slice(0, keys.length - 150);
+      for (const k of drop) delete obj[k];
+    }
+    localStorage.setItem("tw_routes", JSON.stringify(obj));
+  } catch (e) {}
+}
+/* local midnight, browser-local, epoch seconds */
+function todayStartSecs() {
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime() / 1000;
+}
+/* today's drives worth drawing: >= 0.5 mi with usable endpoints, max 10/car */
+function routeableDrives(drives) {
+  const t0 = todayStartSecs();
+  return (drives || [])
+    .filter(d => d.startedAt >= t0 && (d.dist || 0) >= 0.5 &&
+      d.sLat !== null && d.sLon !== null && d.eLat !== null && d.eLon !== null)
+    .slice(0, 10);
+}
+/* OSRM wants lon,lat order */
+function osrmUrl(sLat, sLon, eLat, eLon) {
+  return "https://router.project-osrm.org/route/v1/driving/" +
+    sLon + "," + sLat + ";" + eLon + "," + eLat +
+    "?overview=full&geometries=geojson";
+}
+function drawRouteLine(vin, latlons) {
+  if (!routeLayer || !latlons || latlons.length < 2) return;
+  L.polyline(latlons, { color: ROUTE_COLORS[vin] || "#64d2ff", weight: 4, opacity: 0.7 })
+    .addTo(routeLayer);
+}
+async function fetchRoute(d, vin, gen) {
+  try {
+    const r = await fetch(osrmUrl(d.sLat, d.sLon, d.eLat, d.eLon));
+    const j = await r.json();
+    const coords = j.routes && j.routes[0] && j.routes[0].geometry &&
+      j.routes[0].geometry.coordinates;
+    if (!coords || coords.length < 2 || gen !== routeGen) return;
+    const latlons = coords.map(p => [p[1], p[0]]);  /* GeoJSON is [lon,lat] */
+    const c = getRouteCache();
+    c[routeCacheKey(vin, d.sLat, d.sLon, d.eLat, d.eLon)] = latlons;
+    setRouteCache(c);
+    drawRouteLine(vin, latlons);
+  } catch (e) { /* skip this drive's line quietly */ }
+}
+function pumpRouteQueue() {
+  if (!routeQueue.length) { routeTimer = null; return; }
+  const job = routeQueue.shift();
+  fetchRoute(job.d, job.vin, job.gen).finally(() => {
+    routeTimer = setTimeout(pumpRouteQueue, 1000);  /* ~1 req/sec courtesy */
+  });
+}
+function updateRoutes(cars) {
+  routeGen++;
+  if (!routeLayer) return;
+  routeLayer.clearLayers();
+  routeQueue = [];
+  if (routeTimer) { clearTimeout(routeTimer); routeTimer = null; }
+  if (!routesOn) return;
+  const cache = getRouteCache();
+  for (const car of cars) {
+    const drives = (drivesCache[car.vin] && drivesCache[car.vin].drives) || [];
+    for (const d of routeableDrives(drives)) {
+      const key = routeCacheKey(car.vin, d.sLat, d.sLon, d.eLat, d.eLon);
+      if (cache[key]) drawRouteLine(car.vin, cache[key]);
+      else routeQueue.push({ d, vin: car.vin, gen: routeGen });
+    }
+  }
+  if (routeQueue.length) pumpRouteQueue();
 }
 
 function renderMap(cars) {
@@ -724,6 +837,7 @@ async function refresh() {
     const cars = await poll();
     renderCards(cars);
     renderMap(cars);
+    updateRoutes(cars);
     renderFleetStrip(cars);
     if (needHomeNudge && !isHomeSet()) {
       errBox.hidden = false;
