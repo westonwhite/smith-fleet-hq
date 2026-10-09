@@ -201,6 +201,10 @@ function buildCar(kc, raw, drives, charges) {
   const num = (o, k) => (o && o[k] !== null && o[k] !== undefined) ? o[k] : null;
   const batteryPct = num(cs, "battery_level");
   const chargingState = cs.charging_state || null;
+  /* Tesla's own rated-range estimate (mi remaining) + remaining energy (kWh):
+   * used to derive the estimated full-battery range shown next to battery %. */
+  const estRange = num(cs, "est_battery_range");
+  const energyRem = num(cs, "energy_remaining");
   const speedMph = num(ds, "speed");
   const shiftState = ds.shift_state || null;
   const driving = shiftState === "D" || (speedMph !== null && speedMph > 0);
@@ -233,6 +237,7 @@ function buildCar(kc, raw, drives, charges) {
   return {
     vin: kc.vin, name: kc.name, img: kc.img, imgMap: kc.imgMap,
     batteryPct, chargingState, driving, speedMph, headingDeg,
+    estRange, energyRem,
     compass: headingDeg !== null ? compass8(headingDeg) : null,
     lat, lon, miles, trend: tr, nowPlaying, stats, month,
     error: raw ? null : "No state from Tessie",
@@ -253,7 +258,22 @@ function batteryClass(c) {
 function batteryHtml(c) {
   const t = batteryText(c), cls = batteryClass(c);
   if (!t || !cls) return "";
-  return '<span class="' + cls + '">' + escapeHtml(t) + "</span>";
+  const r = fullRangeMi(c);
+  return '<span class="' + cls + '">' + escapeHtml(t) + "</span>" +
+    (r !== null ? ' <span class="range">~' + r + ' mi full</span>' : "");
+}
+/* Estimated miles on a full battery, shown next to the battery %.
+ * Prefers Tesla's own rated estimate scaled to 100%; falls back to
+ * remaining-energy / recent (7-day) efficiency when the estimate is absent. */
+function fullRangeMi(c) {
+  const pct = c.batteryPct;
+  if (pct === null || pct <= 0) return null;
+  if (c.estRange !== null && c.estRange > 0) return Math.round(c.estRange * 100 / pct);
+  const wh = c.stats && c.stats.whPerMile;
+  if (c.energyRem !== null && c.energyRem > 0 && wh) {
+    return Math.round(c.energyRem * 100 / pct * 1000 / wh);
+  }
+  return null;
 }
 function statusText(c) {
   if (!c.driving) return "Parked";
@@ -447,8 +467,7 @@ async function reverseGeocode(lat, lon) {
 }
 /* Raw coordinates are NEVER rendered as text on the page — cards show only
  * the human-readable area name. If a live lookup fails, fall back to the
- * the name is shown ONLY for the car's current coordinates; a failed lookup
- * shows "On the road", never a stale nearby cached name. (Coords stay in
+ * nearest previously-resolved area, then to "On the road". (Coords stay in
  * the data layer where the map needs them.) */
 function enrichLocations(cars) {
   cars.forEach((car, i) => {
@@ -462,14 +481,34 @@ function enrichLocations(cars) {
     };
     const cached = getAreaName(car.lat, car.lon);
     if (cached !== null) {
-      setName(cached || "On the road");
+      setName(cached || nearestCachedArea(car.lat, car.lon) || "On the road");
       return;
     }
     setTimeout(async () => {
       const name = await reverseGeocode(car.lat, car.lon);
-      setName(name || "On the road");
+      setName(name || nearestCachedArea(car.lat, car.lon) || "On the road");
     }, i * 1200);
   });
+}
+
+/* nearest previously-resolved area within 25 miles — a friendly fallback
+ * when a fresh reverse-geocode lookup fails */
+function nearestCachedArea(lat, lon) {
+  let best = null, bestD = 25;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || k.indexOf("tw_area_") !== 0) continue;
+      const parts = k.slice(8).split(",");
+      const la = parseFloat(parts[0]), lo = parseFloat(parts[1]);
+      if (isNaN(la) || isNaN(lo)) continue;
+      const name = localStorage.getItem(k);
+      if (!name) continue;
+      const d = haversineMiles(lat, lon, la, lo);
+      if (d < bestD) { bestD = d; best = name; }
+    }
+  } catch (e) { /* storage hiccup: fall through to "On the road" */ }
+  return best;
 }
 
 function escapeHtml(s) {
