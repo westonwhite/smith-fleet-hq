@@ -447,7 +447,8 @@ async function reverseGeocode(lat, lon) {
 }
 /* Raw coordinates are NEVER rendered as text on the page — cards show only
  * the human-readable area name. If a live lookup fails, fall back to the
- * nearest previously-resolved area, then to "On the road". (Coords stay in
+ * the name is shown ONLY for the car's current coordinates; a failed lookup
+ * shows "On the road", never a stale nearby cached name. (Coords stay in
  * the data layer where the map needs them.) */
 function enrichLocations(cars) {
   cars.forEach((car, i) => {
@@ -461,34 +462,14 @@ function enrichLocations(cars) {
     };
     const cached = getAreaName(car.lat, car.lon);
     if (cached !== null) {
-      setName(cached || nearestCachedArea(car.lat, car.lon) || "On the road");
+      setName(cached || "On the road");
       return;
     }
     setTimeout(async () => {
       const name = await reverseGeocode(car.lat, car.lon);
-      setName(name || nearestCachedArea(car.lat, car.lon) || "On the road");
+      setName(name || "On the road");
     }, i * 1200);
   });
-}
-
-/* nearest previously-resolved area within 25 miles — a friendly fallback
- * when a fresh reverse-geocode lookup fails */
-function nearestCachedArea(lat, lon) {
-  let best = null, bestD = 25;
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (!k || k.indexOf("tw_area_") !== 0) continue;
-      const parts = k.slice(8).split(",");
-      const la = parseFloat(parts[0]), lo = parseFloat(parts[1]);
-      if (isNaN(la) || isNaN(lo)) continue;
-      const name = localStorage.getItem(k);
-      if (!name) continue;
-      const d = haversineMiles(lat, lon, la, lo);
-      if (d < bestD) { bestD = d; best = name; }
-    }
-  } catch (e) { /* storage hiccup: fall through to "On the road" */ }
-  return best;
 }
 
 function escapeHtml(s) {
