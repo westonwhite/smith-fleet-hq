@@ -1,0 +1,114 @@
+<!-- Smith Robotaxi HQ build 2026-10-13 v19 : Automations page -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Automations - Smith Robotaxi HQ</title>
+<style>
+  :root { --bg:#14161b; --card:#1b1e24; --fg:#fff; --muted:#b0b6be; --faint:#7a8087; --accent:#4da3ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif; }
+  header { display:flex; align-items:center; gap:8px; padding:10px 14px 2px; }
+  header h1 { font-size:18px; margin:0; flex:1; }
+  header button { background:#262b33; color:var(--fg); border:1px solid #333a44;
+                  border-radius:10px; font-size:15px; padding:5px 9px; }
+  .note { margin:10px 14px 0; padding:10px 12px; background:#101216;
+          border:1px solid #2a2f37; border-radius:12px; font-size:13px;
+          color:var(--muted); line-height:1.5; }
+  .note b { color:var(--fg); }
+  h2 { font-size:15px; margin:18px 14px 6px; }
+  .list { padding:0 12px 16px; display:flex; flex-direction:column; gap:8px; }
+  .row { background:var(--card); border:1px solid #2a2f37; border-radius:12px; padding:10px 12px; }
+  .row-top { display:flex; align-items:center; gap:8px; }
+  .row-top .name { font-size:15px; font-weight:700; flex:1; }
+  .pill { font-size:11px; font-weight:700; color:#7ee2a0; background:rgba(52,199,89,.15);
+          border:1px solid #34c759; border-radius:999px; padding:2px 9px; white-space:nowrap; }
+  .when { color:var(--faint); font-size:12px; margin-top:3px; }
+  .what { color:var(--muted); font-size:13px; margin-top:3px; line-height:1.45; }
+  .copybtn { margin-top:8px; background:#262b33; color:var(--fg); border:1px solid #333a44;
+             border-radius:10px; font-size:13px; padding:6px 12px; }
+  .updated { color:var(--faint); font-size:11px; text-align:center; padding:0 0 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Automations</h1>
+  <button onclick="location.href='index.html'">Back</button>
+</header>
+<div class="note"><b>How this works.</b> This page lists the routines currently running. It cannot switch them off by itself. Tap <b>Copy</b> on any routine, paste the message to Muse, and Muse will switch it off and update this list. Every time a routine is added or changed, this list is updated too. Paused routines are not listed here. Ask Muse to resume one.</div>
+
+<h2>Climate and Sentry</h2>
+<div class="list">
+  <div class="row"><div class="row-top"><span class="name">Anna morning precondition</span><span class="pill">Active</span></div><div class="when">Every day, 5:30 AM</div><div class="what">On Anna's Tampa General work mornings, preconditions her car at home while plugged in. Cools to about 72F when hot, driver seat heat only when cold.</div><button class="copybtn" data-msg="Disable the Anna morning precondition routine">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Anna morning climate off</span><span class="pill">Active</span></div><div class="when">Every day, 6:00 AM</div><div class="what">Stops climate and seat heat after the morning precondition window.</div><button class="copybtn" data-msg="Disable the Anna morning climate off routine">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Anna evening cooldown</span><span class="pill">Active</span></div><div class="when">Every day, 7:20 PM</div><div class="what">Pre-cools her car at Tampa General before her walk-out when the battery is at 30 percent or higher.</div><button class="copybtn" data-msg="Disable the Anna evening cooldown routine">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Anna evening cooldown off</span><span class="pill">Active</span></div><div class="when">Every day, 7:40 PM</div><div class="what">Stops the evening cooldown after about 20 minutes.</div><button class="copybtn" data-msg="Disable the Anna evening cooldown off routine">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Anna gym climate and Sentry</span><span class="pill">Active</span></div><div class="when">Every 15 minutes</div><div class="what">When Anna is at Crunch Fitness Palm Harbor, keeps climate on and Sentry on.</div><button class="copybtn" data-msg="Disable the Anna gym climate and Sentry routine">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Weston gym climate and Sentry</span><span class="pill">Active</span></div><div class="when">Every 15 minutes</div><div class="what">When a car is at Crunch Fitness Countryside, keeps climate on and Sentry on. At home, Sentry stays off except 11 PM to 5 AM, when it is forced on.</div><button class="copybtn" data-msg="Disable the Weston gym climate and Sentry routine">Copy disable message</button></div>
+</div>
+
+<h2>Charging and Fleet Watch</h2>
+<div class="list">
+  <div class="row"><div class="row-top"><span class="name">Home charging 16A guard</span><span class="pill">Active</span></div><div class="when">Every 10 minutes</div><div class="what">Caps charging at 16 amps per car when plugged in at home.</div><button class="copybtn" data-msg="Disable the home charging 16A guard">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Tesla fleet watchdog</span><span class="pill">Active</span></div><div class="when">Every 30 minutes</div><div class="what">Watches all three cars and pings only on anomalies: night drives, fast parked drain, low battery, charger stalls, unlocked away from home, long climate sessions.</div><button class="copybtn" data-msg="Disable the Tesla fleet watchdog">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Starship seat heat guard</span><span class="pill">Active</span></div><div class="when">Every 15 minutes</div><div class="what">Keeps an eye on the Starship seat heat setting.</div><button class="copybtn" data-msg="Disable the Starship seat heat guard">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Anna plug in reminder</span><span class="pill">Active</span></div><div class="when">Evenings, every 15 minutes</div><div class="what">Before a Tampa General shift, reminds Anna once to plug in during her drive-home window, naming the right charger.</div><button class="copybtn" data-msg="Disable the Anna plug in reminder">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Anna work charger nudge</span><span class="pill">Active</span></div><div class="when">Mornings 5:45 to 8:30 AM, every 15 minutes</div><div class="what">If her car is at Tampa General and tonight's forecast home arrival is thin, nudges her once to charge at work.</div><button class="copybtn" data-msg="Disable the Anna work charger nudge">Copy disable message</button></div>
+</div>
+
+<h2>Deal Watches</h2>
+<div class="list">
+  <div class="row"><div class="row-top"><span class="name">Carvana Tesla watch</span><span class="pill">Active</span></div><div class="when">Every 30 minutes</div><div class="what">Checks Carvana for new Cybertrucks, purchasable Cybertrucks, FSD mentions, and HW4 deals better than the 2025 Model 3 deal.</div><button class="copybtn" data-msg="Disable the Carvana Tesla watch">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Marketplace instant FSD alerts</span><span class="pill">Active</span></div><div class="when">Every 10 minutes</div><div class="what">Scans Facebook Marketplace for paid FSD deals, budget steals, good deals, and Model 3 Performance cars.</div><button class="copybtn" data-msg="Disable the Marketplace instant FSD alerts">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Model 3 wheels watch</span><span class="pill">Active</span></div><div class="when">Every hour</div><div class="what">Watches Marketplace for replacement rims with tires for the 2018 Model 3.</div><button class="copybtn" data-msg="Disable the Model 3 wheels watch">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Highland accessory watch</span><span class="pill">Active</span></div><div class="when">Twice a day</div><div class="what">Checks for deals on Model 3 Highland accessories like the camping mattress and side window shades.</div><button class="copybtn" data-msg="Disable the Highland accessory watch">Copy disable message</button></div>
+</div>
+
+<h2>TarponHub Display</h2>
+<div class="list">
+  <div class="row"><div class="row-top"><span class="name">TarponHub Anna morning edition</span><span class="pill">Active</span></div><div class="when">Every day, 4:40 AM</div><div class="what">On Anna's work mornings, switches the hub display to her morning edition.</div><button class="copybtn" data-msg="Disable the TarponHub Anna morning edition">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">TarponHub morning handoff</span><span class="pill">Active</span></div><div class="when">Every day, 5:50 AM</div><div class="what">Switches the hub display from Anna's edition to Weston's day feed.</div><button class="copybtn" data-msg="Disable the TarponHub morning handoff">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">TarponHub day feed</span><span class="pill">Active</span></div><div class="when">Twice a day, 7 AM and 7 PM</div><div class="what">Rebuilds the hub digest with Tampa Bay events, ideas, and fleet notes.</div><button class="copybtn" data-msg="Disable the TarponHub day feed">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">TarponHub Q and A poll</span><span class="pill">Active</span></div><div class="when">Every 5 minutes</div><div class="what">Polls for questions sent to the hub display.</div><button class="copybtn" data-msg="Disable the TarponHub Q and A poll">Copy disable message</button></div>
+</div>
+
+<h2>One-Time Reminders</h2>
+<div class="list">
+  <div class="row"><div class="row-top"><span class="name">Tesla Service visit checklist</span><span class="pill">Active</span></div><div class="when">Today, Oct 13, 9:00 AM</div><div class="what">One time reminder with the checklist for the St. Pete service visit.</div><button class="copybtn" data-msg="Cancel the Tesla Service visit checklist reminder">Copy disable message</button></div>
+  <div class="row"><div class="row-top"><span class="name">Carvana return decision reminder</span><span class="pill">Active</span></div><div class="when">Oct 14, 8:00 AM</div><div class="what">One time reminder ahead of the 8 PM Carvana return deadline.</div><button class="copybtn" data-msg="Cancel the Carvana return decision reminder">Copy disable message</button></div>
+</div>
+
+<div class="updated">List updated Oct 13, 2026.</div>
+
+<script>
+document.querySelectorAll('.copybtn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var text = btn.getAttribute('data-msg');
+    var done = function() {
+      var old = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(function() { btn.textContent = old; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function() { fallbackCopy(text, done); });
+    } else {
+      fallbackCopy(text, done);
+    }
+  });
+});
+function fallbackCopy(text, done) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  done();
+}
+</script>
+</body>
+</html>
