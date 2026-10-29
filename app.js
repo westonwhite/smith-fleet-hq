@@ -600,7 +600,7 @@ function renderCards(cars) {
     const stats = statsText(car);
     const statusBits = [statusText(car), dist].filter(Boolean).map(escapeHtml);
     if (battH) statusBits.unshift(battH);
-    const detBody = [monthDetailText(car.month), stats].filter(Boolean).join(" · ");
+    const detBody = [monthDetailText(car.month), yearDetailText(car.year), stats].filter(Boolean).join(" · ");
     card.innerHTML =
       '<div class="card-top">' +
         '<canvas width="330" height="138" data-vin="' + car.vin + '"></canvas>' +

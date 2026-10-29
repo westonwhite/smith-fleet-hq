@@ -1,4 +1,4 @@
-<!-- Smith Robotaxi HQ build 2026-10-29 v21 -->
+<!-- Smith Robotaxi HQ build 2026-10-29 v22 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,6 +66,7 @@
   .mapctl button.active { background:#0d47a1; color:#fff; border-color:#0d47a1; }
   #pickbar { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); z-index:1000;
              display:flex; gap:8px; }
+  #pickbar[hidden] { display:none; }
   #pickbar button { background:#0d47a1; color:#fff; border:none; border-radius:10px;
                     padding:10px 18px; font-size:15px; box-shadow:0 2px 6px rgba(0,0,0,.4); }
   #pickbar button.cancel { background:#555; }
@@ -125,6 +126,6 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=20261029v21"></script>
+<script src="app.js?v=20261029v22"></script>
 </body>
 </html>
