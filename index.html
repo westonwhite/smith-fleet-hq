@@ -96,7 +96,14 @@
 <div id="updated"></div>
 
 <section id="settings" hidden>
-  <label>Tessie API token (generate at dash.tessie.com/settings/api)</label>
+  <label>Data source</label>
+  <select id="sourceSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #333a44;background:#101216;color:var(--fg);font-size:14px">
+    <option value="auto">Auto — private Worker if this browser is paired, else Tessie token</option>
+    <option value="worker">Private Worker only (no token in this browser)</option>
+    <option value="token">Tessie token (direct, manual fallback)</option>
+  </select>
+  <div id="sourceLine" style="font-size:13px; margin-top:6px; color:#8e8e93;"></div>
+  <label>Tessie API token (fallback — generate at dash.tessie.com/settings/api)</label>
   <input id="tokenInput" type="text" placeholder="paste token here" autocomplete="off" spellcheck="false"/>
   <label>Electricity rate ($/kWh) — used for the month energy-cost estimate</label>
   <input id="rateInput" type="text" inputmode="decimal" placeholder="0.18"/>
@@ -126,6 +133,6 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=20261029v22"></script>
+<script src="app.js?v=20261029v23"></script>
 </body>
 </html>

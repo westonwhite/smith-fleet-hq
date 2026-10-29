@@ -1,6 +1,6 @@
 "use strict";
-/* Tesla fleet web clone — static page, no build step. Talks to Tessie's API
- * directly from the browser (CORS is allowed). Token lives in localStorage.
+/* Tesla fleet web clone — static page, no build step. Talks to Tessie either through the private
+ * fleet Worker (pairing key in localStorage) or directly with a manual token.
  * No hardcoded home location ships in these files (privacy): the user sets it
  * in Settings via address lookup, pick-on-map, or manual coordinates. */
 
@@ -26,7 +26,30 @@ const WHEEL_SPECS = {
   "5YJ3E1EA9SF060398": [{ cx: 0.815, cy: 0.758, r: 0.055 }, { cx: 0.220, cy: 0.760, r: 0.057 }],
 };
 
+/* Worker mode: a private Cloudflare Worker holds the Tessie token server-side.
+ * The browser only holds a pairing key in localStorage ("tesla_worker_key"),
+ * shared with the car hub (same origin, westonwhite.github.io), so pairing the
+ * hub via hub.html#k=… pairs this page too. The key is never in this repo.
+ * Opening this page as index.html#k=<key> also pairs and strips the hash. */
+const WORKER_DEFAULT = "https://tesla-fleet.smithfleet.workers.dev";
+(function pairFromHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (!h.has("k") && !h.has("unpair")) return;
+  try {
+    if (h.has("unpair")) { localStorage.removeItem("tesla_worker_key"); localStorage.removeItem("tesla_worker_url"); }
+    else { localStorage.setItem("tesla_worker_key", h.get("k")); if (h.get("w")) localStorage.setItem("tesla_worker_url", h.get("w")); }
+  } catch (e) {}
+  history.replaceState(null, "", location.pathname + location.search);
+})();
+
 const store = {
+  get workerKey() { return localStorage.getItem("tesla_worker_key") || ""; },
+  get workerUrl() { return (localStorage.getItem("tesla_worker_url") || WORKER_DEFAULT).replace(/\/+$/, ""); },
+  /* "auto" (Worker when paired, else manual token) | "worker" | "token" */
+  get source()  { return localStorage.getItem("tw_source") || "auto"; },
+  set source(v) { localStorage.setItem("tw_source", v); },
+  get useWorker() { return this.source === "worker" || (this.source === "auto" && !!this.workerKey); },
+  get ready()   { return this.useWorker ? !!this.workerKey : !!this.token; },
   get token()   { return localStorage.getItem("tw_token") || ""; },
   set token(v)  { localStorage.setItem("tw_token", v); },
   get rate()    { const v = parseFloat(localStorage.getItem("tw_rate")); return isNaN(v) ? 0.18 : v; },
@@ -113,6 +136,14 @@ const TREND_ARROW = { closer: "↓", further: "↑", holding: "→", unknown: "�
 
 /* ---------- tessie ---------- */
 async function tessie(path) {
+  if (store.useWorker) {
+    /* Read-only Worker passthrough: /tessie/{vin}/state|drives|charges */
+    const r = await fetch(store.workerUrl + "/tessie" + path, {
+      headers: { "X-Access-Key": store.workerKey, "Accept": "application/json" }, cache: "no-store",
+    });
+    if (!r.ok) throw new Error(r.status === 401 ? "Worker rejected the pairing key" : "Worker HTTP " + r.status);
+    return r.json();
+  }
   const r = await fetch("https://api.tessie.com" + path, {
     headers: { "Authorization": "Bearer " + store.token, "Accept": "application/json" },
   });
@@ -1163,10 +1194,13 @@ let homeNudgeShown = false;
 async function refresh() {
   const errBox = document.getElementById("err");
   errBox.hidden = true;
-  if (!store.token) {
+  refreshSourceLine();
+  if (!store.ready) {
     document.getElementById("settings").hidden = false;
     errBox.hidden = false;
-    errBox.textContent = "Enter your Tessie API token in Settings to load the fleet.";
+    errBox.textContent = store.source === "worker"
+      ? "Not paired — open the pairing link once on this browser, or switch Data source to the Tessie token."
+      : "Enter your Tessie API token in Settings (or pair this browser with the Worker) to load the fleet.";
     return;
   }
   try {
@@ -1188,12 +1222,25 @@ async function refresh() {
     }
   } catch (e) {
     errBox.hidden = false;
-    errBox.textContent = "Could not reach Tessie: " + e.message + " — check the token in Settings.";
+    errBox.textContent = store.useWorker
+      ? "Could not reach the fleet Worker: " + e.message + " — re-pair, or switch Data source to the Tessie token in Settings."
+      : "Could not reach Tessie: " + e.message + " — check the token in Settings.";
   }
+}
+
+function refreshSourceLine() {
+  const el = document.getElementById("sourceLine");
+  if (!el) return;
+  const paired = !!store.workerKey;
+  el.textContent = (store.useWorker ? "Using: private Worker" : "Using: Tessie token (direct)") +
+    " · Worker " + (paired ? "paired ✓" : "not paired");
+  el.style.color = paired ? "#7ee2a0" : "#8e8e93";
 }
 
 function initSettings() {
   const sec = document.getElementById("settings");
+  document.getElementById("sourceSelect").value = store.source;
+  refreshSourceLine();
   document.getElementById("settingsBtn").addEventListener("click", () => {
     sec.hidden = !sec.hidden;
   });
@@ -1208,6 +1255,7 @@ function initSettings() {
 
   document.getElementById("saveBtn").addEventListener("click", () => {
     store.token = document.getElementById("tokenInput").value.trim();
+    store.source = document.getElementById("sourceSelect").value;
     const r = parseFloat(document.getElementById("rateInput").value);
     if (!isNaN(r) && r >= 0) store.rate = r;
     const gp = parseFloat(document.getElementById("gasInput").value);
