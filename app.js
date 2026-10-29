@@ -40,13 +40,33 @@ const store = {
   get homeLat() { const v = localStorage.getItem("tw_home_lat"); return v === null ? null : parseFloat(v); },
   get homeLon() { const v = localStorage.getItem("tw_home_lon"); return v === null ? null : parseFloat(v); },
   get homeLabel() { return localStorage.getItem("tw_home_label") || ""; },
+  /* Where the saved home came from: "manual" (address lookup, map pick, or
+   * the lat/lon fields) or "detected" (auto-detected from fleet parking).
+   * Homes saved before this key existed have no source and are treated as
+   * manual — they were all set by one of the manual flows. Manual ALWAYS
+   * wins: detection must never overwrite a manual home. */
+  get homeSource() {
+    if (localStorage.getItem("tw_home_lat") === null) return null;
+    return localStorage.getItem("tw_home_source") === "detected" ? "detected" : "manual";
+  },
   setHome(la, lo, label) {
     localStorage.setItem("tw_home_lat", String(la));
     localStorage.setItem("tw_home_lon", String(lo));
+    localStorage.setItem("tw_home_source", "manual");
     if (label !== undefined) {
       if (label) localStorage.setItem("tw_home_label", label);
       else localStorage.removeItem("tw_home_label");
     }
+  },
+  /* Auto-detected home. Refuses to touch a manual home; may refine its own
+   * earlier detection as more drive data accumulates. */
+  setDetectedHome(la, lo) {
+    if (this.homeSource === "manual") return false;
+    localStorage.setItem("tw_home_lat", String(la));
+    localStorage.setItem("tw_home_lon", String(lo));
+    localStorage.setItem("tw_home_source", "detected");
+    localStorage.setItem("tw_home_label", "Detected automatically");
+    return true;
   },
   dist(vin)     { const v = localStorage.getItem("tw_dist_" + vin); return v === null ? null : parseFloat(v); },
   setDist(vin, d) {
@@ -141,6 +161,83 @@ async function getCharges(vin) {
   return charges;
 }
 
+/* ---------- automatic home detection ----------
+ * A fresh browser used to have NO home until someone fought through the
+ * Settings flows, so the "set home" nudge fired on every launch. Instead,
+ * derive home from the fleet's own data: the place cars park most often.
+ * Evidence = every drive endpoint in the fetched drives (a drive ending
+ * somewhere means the car parked there) plus each car's current position
+ * (weighted up when parked). Points are bucketed into ~0.4 mi grid cells;
+ * the fullest cell's centroid is home. Saved via setDetectedHome, which
+ * never overwrites a manually set home. */
+function detectHome(cars) {
+  if (store.homeSource === "manual") return;
+  const cells = {};
+  const add = (lat, lon, w) => {
+    if (lat === null || lon === null || lat === undefined || lon === undefined) return;
+    const k = Math.round(lat / 0.006) + "," + Math.round(lon / 0.006);
+    const c = cells[k] || (cells[k] = { n: 0, la: 0, lo: 0 });
+    c.n += w; c.la += lat * w; c.lo += lon * w;
+  };
+  for (const car of cars) {
+    const drives = (drivesCache[car.vin] && drivesCache[car.vin].drives) || [];
+    for (const d of drives) { add(d.sLat, d.sLon, 1); add(d.eLat, d.eLon, 1); }
+    if (car.lat !== null && car.lon !== null) add(car.lat, car.lon, car.driving ? 1 : 5);
+  }
+  let best = null;
+  for (const k of Object.keys(cells)) {
+    if (!best || cells[k].n > best.n) best = cells[k];
+  }
+  /* demand a real pattern (several parkings), not one stray endpoint */
+  if (!best || best.n < 6) return;
+  store.setDetectedHome(best.la / best.n, best.lo / best.n);
+}
+
+/* ---------- true first drive in Tessie ----------
+ * The drives endpoint returns newest-first and ignores page/order params,
+ * but it does honor "to": results are drives ENDING at or before the given
+ * epoch (verified against the live API). So the earliest drive Tessie
+ * holds is found by binary search: the newest drive ending at/before T,
+ * for the smallest T that returns anything, is the car's first drive
+ * (a car's drives never overlap, so earliest-ending = earliest-started).
+ * ~22 one-drive requests, run once per car and cached in localStorage
+ * for 30 days — the first drive can only change if Tessie imports older
+ * history. Returns started_at epoch secs, or null on any failure. */
+const firstDriveCache = {};
+async function getFirstDrive(vin) {
+  if (firstDriveCache[vin] !== undefined) return firstDriveCache[vin];
+  try {
+    const cached = parseFloat(localStorage.getItem("tw_first_" + vin));
+    const cachedAt = parseFloat(localStorage.getItem("tw_first_at_" + vin));
+    if (!isNaN(cached) && cached > 0 && !isNaN(cachedAt) &&
+        Date.now() - cachedAt < 30 * 24 * 3600 * 1000) {
+      firstDriveCache[vin] = cached;
+      return cached;
+    }
+  } catch (e) { /* storage hiccup: fall through to the search */ }
+  let found = null;
+  try {
+    let lo = Date.UTC(2013, 0, 1) / 1000;           /* no drives end before this */
+    let hi = Math.floor(Date.now() / 1000);          /* the newest drive ends by now */
+    let best = null;
+    while (hi - lo > 90) {
+      const mid = Math.floor((lo + hi) / 2);
+      const d = await tessie("/" + vin + "/drives?limit=1&to=" + mid);
+      const r = (d.results || [])[0];
+      if (r) { best = r; hi = mid; } else { lo = mid; }
+    }
+    if (best && best.started_at) found = best.started_at;
+  } catch (e) { found = null; }
+  if (found !== null) {
+    try {
+      localStorage.setItem("tw_first_" + vin, String(found));
+      localStorage.setItem("tw_first_at_" + vin, String(Date.now()));
+    } catch (e) { /* non-fatal */ }
+  }
+  firstDriveCache[vin] = found;
+  return found;
+}
+
 /* first of the current month, browser-local, epoch seconds */
 function monthStartSecs() {
   const n = new Date();
@@ -158,6 +255,7 @@ function computeMonth(drives, charges, rate) {
   const mc = charges.filter(c => c.startedAt >= start && c.added > 0);
   const kwhAdded = mc.length ? mc.reduce((s, c) => s + c.added, 0) : null;
   const kwhUsed = md.length ? md.reduce((s, d) => s + d.kwh, 0) : null;
+  const earliest = drives.filter(d => d.startedAt > 0).reduce((m, d) => Math.min(m, d.startedAt), Infinity);
   return {
     autopilotPct,
     kwhAdded,
@@ -167,6 +265,9 @@ function computeMonth(drives, charges, rate) {
     estCost: kwhUsed !== null ? kwhUsed * rate : null,
     hasData: md.length > 0 || mc.length > 0,
     driveMiles: totalMi,
+    /* same honesty rule as the year: if the fetched drives do not reach
+     * back to the 1st, month totals are minimums, not the full month */
+    truncated: earliest !== Infinity && earliest > start,
   };
 }
 
@@ -213,18 +314,32 @@ function computeStats(drives, odometer, lifetimeChargedKwh) {
 }
 
 async function poll() {
-  const cars = [];
+  const fetched = [];
   for (const kc of KNOWN_CARS) {
     let raw = null;
     try { raw = await tessie("/" + kc.vin + "/state"); } catch (e) { raw = null; }
     const drives = await getDrives(kc.vin);
     const charges = await getCharges(kc.vin);
-    cars.push(buildCar(kc, raw, drives, charges));
+    const firstDrive = await getFirstDrive(kc.vin);
+    fetched.push({ kc, raw, drives, charges, firstDrive });
   }
-  return cars;
+  /* Detect home BEFORE building the cards, so distance-from-home works
+   * on the very first load of a fresh browser, not one refresh later.
+   * detectHome reads drive endpoints from drivesCache (just populated)
+   * plus these current positions. Never overwrites a manual home. */
+  detectHome(fetched.map(f => {
+    const ds = (f.raw && f.raw.drive_state) || {};
+    return {
+      vin: f.kc.vin,
+      lat: (ds.latitude === null || ds.latitude === undefined) ? null : ds.latitude,
+      lon: (ds.longitude === null || ds.longitude === undefined) ? null : ds.longitude,
+      driving: ds.shift_state === "D",
+    };
+  }));
+  return fetched.map(f => buildCar(f.kc, f.raw, f.drives, f.charges, f.firstDrive));
 }
 
-function buildCar(kc, raw, drives, charges) {
+function buildCar(kc, raw, drives, charges, firstDriveTs) {
   const cs = (raw && raw.charge_state) || {};
   const ds = (raw && raw.drive_state) || {};
   const vs = (raw && raw.vehicle_state) || {};
@@ -266,16 +381,29 @@ function buildCar(kc, raw, drives, charges) {
   );
   const month = computeMonth(drives || [], charges || [], store.rate);
   const year = computeYear(drives || [], charges || [], store.rate);
-  /* First drive Tessie shows: the earliest startedAt in the fetched
-   * drives, NOT a purchase date and NOT proof of the day driving
-   * started. If 200 drives were fetched, it is only the earliest in
-   * that window, and the card says so. */
-  const firstDrive = (drives || []).filter(d => d.startedAt > 0)
-    .reduce((m, d) => Math.min(m, d.startedAt), Infinity);
-  const firstAvailable = firstDrive === Infinity ? null : {
-    date: new Date(firstDrive * 1000).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
-    windowOnly: (drives || []).length >= 200,
-  };
+  /* First drive in Tessie: getFirstDrive binary-searches the drives
+   * endpoint's "to" filter for the TRUE earliest drive Tessie holds
+   * (v20 wrongly showed the earliest of the 200 most recent — for the
+   * Starship that read Aug 2026 when the real first drive is in 2023).
+   * It is NOT a purchase date. If the search fails, fall back to the
+   * earliest fetched drive, labelled as window-only when the fetch hit
+   * the 200-drive limit. */
+  let firstAvailable = null;
+  if (firstDriveTs) {
+    firstAvailable = {
+      date: new Date(firstDriveTs * 1000).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+      windowOnly: false,
+    };
+  } else {
+    const fd = (drives || []).filter(d => d.startedAt > 0)
+      .reduce((m, d) => Math.min(m, d.startedAt), Infinity);
+    if (fd !== Infinity) {
+      firstAvailable = {
+        date: new Date(fd * 1000).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+        windowOnly: (drives || []).length >= 200,
+      };
+    }
+  }
   return {
     vin: kc.vin, name: kc.name, img: kc.img, imgMap: kc.imgMap,
     year, firstAvailable,
@@ -366,9 +494,19 @@ function monthFace(m) {
 function monthDetailText(m) {
   const det = [];
   if (!m) return "";
+  if (m.driveMiles) det.push("Drove " + (m.truncated ? "at least " : "") +
+    Math.round(m.driveMiles).toLocaleString() + " mi this month");
   if (m.kwhAdded !== null) det.push("Charged " + m.kwhAdded.toFixed(1) + " kWh");
   if (m.kwhUsed !== null) det.push("Driving used " + m.kwhUsed.toFixed(1) + " kWh");
   return det.join(" · ");
+}
+
+/* Year detail line: total miles driven year to date, with the same
+ * "at least" minimum labelling when the drive window is truncated. */
+function yearDetailText(y) {
+  if (!y || !y.hasData || !y.driveMiles) return "";
+  return "Drove " + (y.truncated ? "at least " : "") +
+    Math.round(y.driveMiles).toLocaleString() + " mi this year";
 }
 
 /* Year face, same shape as monthFace, with the "at least" honesty
@@ -479,8 +617,9 @@ function renderCards(cars) {
         '<details class="monthdet"><summary>This month: ' + monthFace(car.month) + '</summary>' +
         (detBody ? '<div>' + escapeHtml(detBody) + '</div>' : '') + '</details>' +
         '<details class="monthdet"><summary>This year: ' + yearFace(car.year) + '</summary>' +
-        (car.firstAvailable ? '<div>First drive Tessie shows: ' + escapeHtml(car.firstAvailable.date) +
-          (car.firstAvailable.windowOnly ? ' (earliest in the last 200 drives, not necessarily the first ever)' : ' — earliest drive in Tessie\'s record for this car, not a purchase date') + '</div>' : '') + '</details>' +
+        (yearDetailText(car.year) ? '<div>' + escapeHtml(yearDetailText(car.year)) + '</div>' : '') +
+        (car.firstAvailable ? '<div>First drive in Tessie: ' + escapeHtml(car.firstAvailable.date) +
+          (car.firstAvailable.windowOnly ? ' (earliest in the last 200 drives, not necessarily the first ever)' : ' — the earliest drive Tessie has recorded for this car, not a purchase date') + '</div>' : '') + '</details>' +
         (car.error ? '<div style="color:#e08a8a">' + escapeHtml(car.error) + '</div>' : "") +
       '</div>';
     wrap.appendChild(card);
@@ -940,7 +1079,9 @@ function refreshHomeLine() {
   if (!el) return;
   if (isHomeSet()) {
     const lbl = store.homeLabel;
-    el.textContent = "Home saved ✓" + (lbl ? " — " + lbl : "");
+    el.textContent = store.homeSource === "detected"
+      ? "Home detected automatically ✓ (where the cars park most) — set it manually below to override."
+      : "Home saved ✓" + (lbl ? " — " + lbl : "");
     el.style.color = "#7ee2a0";
   } else {
     el.textContent = "Home not set yet.";
@@ -1014,12 +1155,13 @@ function renderFleetStrip(cars) {
   el.hidden = false;
 }
 
+/* The "set home" nudge may appear at most once per page load, and only
+ * when there is genuinely no home from any source (manual or detected).
+ * If home coordinates exist in localStorage, no prompt ever shows. */
+let homeNudgeShown = false;
+
 async function refresh() {
   const errBox = document.getElementById("err");
-  /* Decide about the home nudge BEFORE any async work, so the prompt can
-   * never flash on and off mid-refresh: it only ever appears when home is
-   * genuinely unset, and stays hidden otherwise. */
-  const needHomeNudge = !isHomeSet();
   errBox.hidden = true;
   if (!store.token) {
     document.getElementById("settings").hidden = false;
@@ -1029,11 +1171,18 @@ async function refresh() {
   }
   try {
     const cars = await poll();
+    /* Fill a missing home from the fleet's own parking pattern BEFORE
+     * anything renders, so distance-from-home works on first load and
+     * the nudge below almost never has a reason to exist. Never touches
+     * a manually set home. */
+    detectHome(cars);
     renderCards(cars);
     renderMap(cars);
     updateRoutes(cars);
     renderFleetStrip(cars);
-    if (needHomeNudge && !isHomeSet()) {
+    refreshHomeLine();
+    if (!isHomeSet() && !homeNudgeShown) {
+      homeNudgeShown = true;
       errBox.hidden = false;
       errBox.textContent = "Set your home location in Settings (address lookup or pick on map).";
     }
@@ -1071,6 +1220,24 @@ function initSettings() {
       reverseGeocode(la, lo).then(name => {
         if (name) { store.setHome(la, lo, name); refreshHomeLine(); }
       });
+    } else if (lookupHit) {
+      /* The v20 trap: a user who looked up an address and tapped Save
+       * (never seeing the separate "Use this address" button) saved
+       * NOTHING — the lat/lon fields were still empty, parseFloat gave
+       * NaN, and setHome was silently skipped, so the site asked about
+       * home again on every launch. Save now honors the lookup too. */
+      store.setHome(lookupHit.lat, lookupHit.lon, lookupHit.label);
+      document.getElementById("latInput").value = lookupHit.lat;
+      document.getElementById("lonInput").value = lookupHit.lon;
+      refreshHomeLine();
+    } else if (document.getElementById("latInput").value.trim() ||
+               document.getElementById("lonInput").value.trim()) {
+      /* Coordinates were typed but don't parse: say so instead of the
+       * old silent skip that left home unset with no explanation. */
+      const el = document.getElementById("homeLine");
+      el.textContent = "Those home coordinates don't look right — home was not saved. Check the latitude/longitude fields.";
+      el.style.color = "#e08a8a";
+      return;
     }
     sec.hidden = true;
     refresh();
