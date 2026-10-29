@@ -170,6 +170,37 @@ function computeMonth(drives, charges, rate) {
   };
 }
 
+/* Jan 1 of the current year, browser-local, epoch seconds */
+function yearStartSecs() {
+  const n = new Date();
+  return new Date(n.getFullYear(), 0, 1).getTime() / 1000;
+}
+
+/* Year-to-date: same math as computeMonth (driving energy × rate),
+ * from Jan 1. truncated is true when the earliest fetched drive is
+ * after Jan 1, i.e. the 200-drive fetch window does not cover the
+ * whole year, so totals are lower bounds, never full-year claims. */
+function computeYear(drives, charges, rate) {
+  const start = yearStartSecs();
+  const yd = drives.filter(d => d.startedAt >= start && d.dist > 0);
+  const totalMi = yd.reduce((s, d) => s + d.dist, 0);
+  const autopilotPct = totalMi > 0
+    ? yd.reduce((s, d) => s + Math.min(d.ap, d.dist), 0) / totalMi * 100 : null;
+  const yc = charges.filter(c => c.startedAt >= start && c.added > 0);
+  const kwhAdded = yc.length ? yc.reduce((s, c) => s + c.added, 0) : null;
+  const kwhUsed = yd.length ? yd.reduce((s, d) => s + d.kwh, 0) : null;
+  const earliest = drives.filter(d => d.startedAt > 0).reduce((m, d) => Math.min(m, d.startedAt), Infinity);
+  return {
+    autopilotPct,
+    kwhAdded,
+    kwhUsed,
+    estCost: kwhUsed !== null ? kwhUsed * rate : null,
+    hasData: yd.length > 0 || yc.length > 0,
+    driveMiles: totalMi,
+    truncated: earliest !== Infinity && earliest > start,
+  };
+}
+
 function computeStats(drives, odometer, lifetimeChargedKwh) {
   const weekAgo = Date.now() / 1000 - 7 * 86400;
   const week = drives.filter(d => d.startedAt >= weekAgo && d.dist > 0);
@@ -234,8 +265,20 @@ function buildCar(kc, raw, drives, charges) {
     num(cs, "lifetime_energy_charged")
   );
   const month = computeMonth(drives || [], charges || [], store.rate);
+  const year = computeYear(drives || [], charges || [], store.rate);
+  /* First drive Tessie shows: the earliest startedAt in the fetched
+   * drives, NOT a purchase date and NOT proof of the day driving
+   * started. If 200 drives were fetched, it is only the earliest in
+   * that window, and the card says so. */
+  const firstDrive = (drives || []).filter(d => d.startedAt > 0)
+    .reduce((m, d) => Math.min(m, d.startedAt), Infinity);
+  const firstAvailable = firstDrive === Infinity ? null : {
+    date: new Date(firstDrive * 1000).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+    windowOnly: (drives || []).length >= 200,
+  };
   return {
     vin: kc.vin, name: kc.name, img: kc.img, imgMap: kc.imgMap,
+    year, firstAvailable,
     batteryPct, chargingState, driving, speedMph, headingDeg,
     estRange, energyRem,
     compass: headingDeg !== null ? compass8(headingDeg) : null,
@@ -326,6 +369,19 @@ function monthDetailText(m) {
   if (m.kwhAdded !== null) det.push("Charged " + m.kwhAdded.toFixed(1) + " kWh");
   if (m.kwhUsed !== null) det.push("Driving used " + m.kwhUsed.toFixed(1) + " kWh");
   return det.join(" · ");
+}
+
+/* Year face, same shape as monthFace, with the "at least" honesty
+ * prefix when the 200-drive window does not reach Jan 1. */
+function yearFace(y) {
+  if (!y || !y.hasData) return "No drives yet this year";
+  const face = [];
+  if (y.autopilotPct !== null) face.push(fsdBadge(y.autopilotPct));
+  if (y.kwhUsed !== null) {
+    face.push("Energy consumed: <b>" + y.kwhUsed.toFixed(0) + " kWh (~$" +
+      (y.estCost !== null ? y.estCost.toFixed(2) : "?") + ")</b>");
+  }
+  return (y.truncated ? "at least " : "") + (face.length ? face.join(" · ") : "No drives yet this year");
 }
 
 /* ---------- car photo canvases with spinning wheels ---------- */
@@ -422,6 +478,9 @@ function renderCards(cars) {
           ? '<div id="loc-' + car.vin + '">📍 Locating…</div>' : "") +
         '<details class="monthdet"><summary>This month: ' + monthFace(car.month) + '</summary>' +
         (detBody ? '<div>' + escapeHtml(detBody) + '</div>' : '') + '</details>' +
+        '<details class="monthdet"><summary>This year: ' + yearFace(car.year) + '</summary>' +
+        (car.firstAvailable ? '<div>First drive Tessie shows: ' + escapeHtml(car.firstAvailable.date) +
+          (car.firstAvailable.windowOnly ? ' (earliest in the last 200 drives, not necessarily the first ever)' : ' — earliest drive in Tessie\'s record for this car, not a purchase date') + '</div>' : '') + '</details>' +
         (car.error ? '<div style="color:#e08a8a">' + escapeHtml(car.error) + '</div>' : "") +
       '</div>';
     wrap.appendChild(card);
@@ -893,10 +952,10 @@ function refreshHomeLine() {
  * Electricity is based on DRIVING energy summed across cars — always present
  * when a car drove (charge sessions can be missing entirely, e.g. Miracle
  * Whip drove 50.8 mi on 10.1 kWh with zero logged charges). */
-function computeFleetTotals(cars, rate, gas) {
+function computeFleetTotals(cars, rate, gas, period) {
   let kwh = 0, miles = 0, any = false;
   for (const c of cars) {
-    const m = c.month;
+    const m = c[period || "month"];
     if (!m || !m.hasData) continue;
     any = true;
     if (m.kwhUsed) kwh += m.kwhUsed;
@@ -915,6 +974,23 @@ function monthLabel() {
   const d = new Date();
   return d.toLocaleString("en-US", { month: "long" });
 }
+/* Year-to-date strip line, appended under the month strip. Same
+ * driving-energy math; "at least" when any car's 200-drive window
+ * does not reach Jan 1. */
+function ytdStripHtml(cars) {
+  const y = computeFleetTotals(cars, store.rate, store.gasPrice, "year");
+  if (!y.any) return "";
+  const anyTruncated = cars.some(c => c.year && c.year.truncated);
+  const yr = new Date().getFullYear();
+  return '<br><span class="win">' + yr + ' to date: </span>' +
+    '<span class="ev" title="Electricity this year: driving energy × your $/kWh rate">⚡ ' +
+    (anyTruncated ? 'at least $' : '$') + y.evCost.toFixed(2) + ' electricity</span>' +
+    '<span class="sep">·</span>' +
+    '<span class="gas" title="Same miles in a 15-mpg gas car">⛽ ~$' + y.gasCost.toFixed(2) + ' in a 15-mpg gas car</span>' +
+    '<span class="sep">—</span>' +
+    '<span class="sv">saved ~$' + y.saved.toFixed(2) + '</span>';
+}
+
 function renderFleetStrip(cars) {
   const el = document.getElementById("fleetstrip");
   if (!el) return;
@@ -933,7 +1009,8 @@ function renderFleetStrip(cars) {
     '<span class="ev" title="Electricity this month: driving energy × your $/kWh rate">⚡ $' + t.evCost.toFixed(2) + ' electricity</span>' +
     '<span class="sep">·</span>' +
     '<span class="gas" title="Same miles in a 15-mpg gas car">⛽ ~$' + t.gasCost.toFixed(2) + ' in a 15-mpg gas car</span>' +
-    '<span class="sep">—</span>' + savedHtml;
+    '<span class="sep">—</span>' + savedHtml +
+    ytdStripHtml(cars);
   el.hidden = false;
 }
 
