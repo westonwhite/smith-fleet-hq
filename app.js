@@ -6,7 +6,6 @@
 
 const KNOWN_CARS = [
   { vin: "5YJ3E1EA2JF051492", name: "Caroline's whip", img: "cars/car_whip.jpg",   imgMap: "cars/car_whip.png" },
-  { vin: "5YJ3E1EA7JF015751", name: "The Starship",   img: "cars/car_starship.jpg", imgMap: "cars/car_starship.png" },
   { vin: "5YJ3E1EA9SF060398", name: "Miracle Whip",    img: "cars/car_miracle.jpg",  imgMap: "cars/car_miracle.png" },
 ];
 
@@ -14,7 +13,6 @@ const KNOWN_CARS = [
  * is a static map — flip per car here if a car's status changes. */
 const FSD_VINS = new Set([
   "5YJ3E1EA2JF051492",
-  "5YJ3E1EA7JF015751",
   "5YJ3E1EA9SF060398",
 ]);
 
@@ -22,7 +20,6 @@ const FSD_VINS = new Set([
  * Photos face right (nose at +x). */
 const WHEEL_SPECS = {
   "5YJ3E1EA2JF051492": [{ cx: 0.806, cy: 0.722, r: 0.077 }, { cx: 0.199, cy: 0.724, r: 0.075 }],
-  "5YJ3E1EA7JF015751": [{ cx: 0.795, cy: 0.605, r: 0.058 }, { cx: 0.184, cy: 0.610, r: 0.058 }],
   "5YJ3E1EA9SF060398": [{ cx: 0.815, cy: 0.758, r: 0.055 }, { cx: 0.220, cy: 0.760, r: 0.057 }],
 };
 
@@ -414,8 +411,8 @@ function buildCar(kc, raw, drives, charges, firstDriveTs) {
   const year = computeYear(drives || [], charges || [], store.rate);
   /* First drive in Tessie: getFirstDrive binary-searches the drives
    * endpoint's "to" filter for the TRUE earliest drive Tessie holds
-   * (v20 wrongly showed the earliest of the 200 most recent — for the
-   * Starship that read Aug 2026 when the real first drive is in 2023).
+   * (v20 wrongly showed the earliest of the 200 most recent, which for
+   * a long-history car read Aug 2026 when the real first drive is in 2023).
    * It is NOT a purchase date. If the search fails, fall back to the
    * earliest fetched drive, labelled as window-only when the fetch hit
    * the 200-drive limit. */
@@ -665,7 +662,7 @@ function renderCards(cars) {
 /* ---------- human-readable area names (Nominatim reverse geocode) ----------
  * Raw lat/lon means nothing to a human, so each car card shows "Downtown
  * Tampa" style names. Results are cached in localStorage (keyed by rounded
- * coords) and the 3 cars' first-time lookups are staggered ~1.2s apart to
+ * coords) and the cars' first-time lookups are staggered ~1.2s apart to
  * respect Nominatim's ~1 req/sec courtesy limit. Coordinates are never shown
  * on the page — only the friendly name, with "On the road" as fallback. */
 function areaKey(lat, lon) { return "tw_area_" + lat.toFixed(3) + "," + lon.toFixed(3); }
@@ -841,7 +838,6 @@ function loadRadar() {
  * These are approximations of the path driven, NOT the car's exact GPS track. */
 const ROUTE_COLORS = {
   "5YJ3E1EA2JF051492": "#64d2ff",  /* Caroline's whip — blue */
-  "5YJ3E1EA7JF015751": "#ff9f0a",  /* The Starship — orange */
   "5YJ3E1EA9SF060398": "#bf5af2",  /* Miracle Whip — purple */
 };
 /* Corridor hints: {via: [lon, lat], a: {lat, lon, radius_mi},
