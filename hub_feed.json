@@ -1,1 +1,68 @@
-{"generated_at": "2026-11-06T22:06:23Z", "generated_note": "Third edition, built by Muse. Tickers are the Friday Nov 6, 2026 regular-session close (TSLA +4.23% rebound after Thursday selloff). Headlines checked Nov 6, 2026.", "headlines": [{"published_at": "2026-11-02", "source": "We Talk Tesla", "title": "Tesla Robotaxi goes live in Fort Worth, its seventh US city and fourth in Texas", "url": "https://wetalktesla.com/2026/11/02/tesla-robotaxi-fort-worth-north-texas-service-zone/"}, {"published_at": "2026-11-01", "source": "Tech Insider", "title": "Tesla Robotaxi hours hit 20 a day, 6 AM to 2 AM, with rear-view camera feed and Grok on Model Y robotaxis", "url": "https://tech-insider.org/tesla-robotaxi-20-hours-6am-2am-rear-view-camera-2026/"}, {"published_at": "2026-11-06", "source": "TradingKey", "title": "Musk: Texas plant to phase out Cybertruck production by mid-2027 to make way for Cybercab expansion", "url": "https://www.tradingkey.com/analysis/stocks/us-stocks/262290624-tesla-premarket-up-3-percent-musk-end-cybertruck-production-texas-2027-cybercab-expansion-tradingkey"}], "schema": 1, "tickers": [{"as_of": "2026-11-06 close", "change_pct": 4.23, "name": "Tesla", "price": 358.22, "symbol": "TSLA"}, {"as_of": "2026-11-06 close", "change_pct": 0.31, "name": "S&P 500 ETF", "price": 735.29, "symbol": "SPY"}, {"as_of": "2026-11-06 close", "change_pct": 1.4, "name": "Nasdaq 100 ETF", "price": 656.1, "symbol": "QQQ"}, {"as_of": "2026-11-06 close", "change_pct": -0.52, "name": "Apple", "price": 342.37, "symbol": "AAPL"}, {"as_of": "2026-11-06 close", "change_pct": 0.84, "name": "Meta", "price": 610.15, "symbol": "META"}]}
+{
+  "generated_at": "2026-11-06T22:06:23Z",
+  "generated_note": "Third edition, built by Muse. Tickers are the Friday Nov 6, 2026 regular-session close (TSLA +4.23% rebound after Thursday selloff). Headlines checked Nov 6, 2026.",
+  "headlines": [
+    {
+      "published_at": "2026-11-02",
+      "source": "We Talk Tesla",
+      "title": "Tesla Robotaxi goes live in Fort Worth, its seventh US city and fourth in Texas",
+      "url": "https://wetalktesla.com/2026/11/02/tesla-robotaxi-fort-worth-north-texas-service-zone/"
+    },
+    {
+      "published_at": "2026-11-01",
+      "source": "Tech Insider",
+      "title": "Tesla Robotaxi hours hit 20 a day, 6 AM to 2 AM, with rear-view camera feed and Grok on Model Y robotaxis",
+      "url": "https://tech-insider.org/tesla-robotaxi-20-hours-6am-2am-rear-view-camera-2026/"
+    },
+    {
+      "published_at": "2026-11-06",
+      "source": "TradingKey",
+      "title": "Musk: Texas plant to phase out Cybertruck production by mid-2027 to make way for Cybercab expansion",
+      "url": "https://www.tradingkey.com/analysis/stocks/us-stocks/262290624-tesla-premarket-up-3-percent-musk-end-cybertruck-production-texas-2027-cybercab-expansion-tradingkey"
+    }
+  ],
+  "schema": 1,
+  "tickers": [
+    {
+      "as_of": "2026-11-06 close",
+      "change_pct": 4.23,
+      "name": "Tesla",
+      "price": 358.22,
+      "symbol": "TSLA"
+    },
+    {
+      "as_of": "2026-11-06 close",
+      "change_pct": 0.31,
+      "name": "S&P 500 ETF",
+      "price": 735.29,
+      "symbol": "SPY"
+    },
+    {
+      "as_of": "2026-11-06 close",
+      "change_pct": 1.4,
+      "name": "Nasdaq 100 ETF",
+      "price": 656.1,
+      "symbol": "QQQ"
+    },
+    {
+      "as_of": "2026-11-06 close",
+      "change_pct": -0.52,
+      "name": "Apple",
+      "price": 342.37,
+      "symbol": "AAPL"
+    },
+    {
+      "as_of": "2026-11-06 close",
+      "change_pct": 0.84,
+      "name": "Meta",
+      "price": 610.15,
+      "symbol": "META"
+    }
+  ],
+  "links": {
+    "service_history": "https://westonwhite.github.io/smith-fleet-hq/service.html",
+    "service_history_miracle_whip": "https://westonwhite.github.io/smith-fleet-hq/service.html#miracle-whip",
+    "service_history_carolines_whip": "https://westonwhite.github.io/smith-fleet-hq/service.html#carolines-whip",
+    "service_log": "https://westonwhite.github.io/smith-fleet-hq/service_log.json"
+  }
+}

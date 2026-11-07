@@ -1,0 +1,105 @@
+<!-- Smith Robotaxi HQ : Service history page (Weston 2026-11-07) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Service History - Smith Robotaxi HQ</title>
+<style>
+  :root { --bg:#14161b; --card:#1b1e24; --fg:#fff; --muted:#b0b6be; --faint:#7a8087; --accent:#4da3ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif; }
+  header { display:flex; align-items:center; gap:8px; padding:10px 14px 2px; }
+  header h1 { font-size:18px; margin:0; flex:1; }
+  header button { background:#262b33; color:var(--fg); border:1px solid #333a44;
+                  border-radius:10px; font-size:15px; padding:5px 9px; }
+  .note { margin:10px 14px 0; padding:10px 12px; background:#101216;
+          border:1px solid #2a2f37; border-radius:12px; font-size:13px;
+          color:var(--muted); line-height:1.5; }
+  .note b { color:var(--fg); }
+  h2 { font-size:15px; margin:18px 14px 6px; }
+  .list { padding:0 12px 16px; display:flex; flex-direction:column; gap:8px; }
+  .row { background:var(--card); border:1px solid #2a2f37; border-radius:12px; padding:10px 12px; }
+  .row-top { display:flex; align-items:center; gap:8px; }
+  .row-top .name { font-size:15px; font-weight:700; flex:1; }
+  .pill { font-size:11px; font-weight:700; color:#7ee2a0; background:rgba(52,199,89,.15);
+          border:1px solid #34c759; border-radius:999px; padding:2px 9px; white-space:nowrap; }
+  .pill.up { color:#ffd60a; background:rgba(255,214,10,.12); border-color:#ffd60a; }
+  .when { color:var(--faint); font-size:12px; margin-top:3px; }
+  .what { color:var(--muted); font-size:13px; margin-top:3px; line-height:1.45; }
+  .what b { color:var(--fg); font-weight:600; }
+  .updated { color:var(--faint); font-size:11px; text-align:center; padding:0 0 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Service History</h1>
+  <button onclick="location.href='index.html'">Back</button>
+</header>
+<div class="note"><b>Both cars, one page.</b> Service records for the whole fleet live here. The Miracle Whip's log is kept in sync from Muse's fleet records (service_log.json); ask Muse to add a visit and it shows up here.</div>
+
+<h2 id="miracle-whip">Miracle Whip (2025 Model 3)</h2>
+<div class="list" id="miracle-list">
+  <div class="row">
+    <div class="row-top"><div class="name">Visit 3: rotor trial / further diagnosis</div><div class="pill up">Upcoming</div></div>
+    <div class="when">Wed Nov 18, 2026, 12:15-1:15 PM · Tesla Service St. Petersburg</div>
+    <div class="what">Rotor trial / further diagnosis of the same wheel-noise issue.</div>
+  </div>
+  <div class="row">
+    <div class="row-top"><div class="name">Visit 2: tire rotation, wheel noise</div><div class="pill">Done</div></div>
+    <div class="when">Thu Nov 5, 2026 · Tesla Service St. Petersburg · No charges</div>
+    <div class="what"><b>Tires:</b> rotation at 33,922 miles (odometer on arrival at Tesla Service). The new tires from Oct 13 are now on the <b>rear</b>; the older tires are on the <b>front</b>.</div>
+    <div class="what"><b>Noise:</b> second visit for the ongoing wheel "wub wub" noise; service could not isolate it. Still unresolved. Service manager ordered two sets of rotors to try.</div>
+    <div class="what"><b>Carvana:</b> advocate Phoebe documented the full wheel-noise timeline on Weston's account (no case number, everything is documented). No new repair claim opened.</div>
+  </div>
+  <div class="row">
+    <div class="row-top"><div class="name">Visit 1: tire foam separation</div><div class="pill">Done</div></div>
+    <div class="when">Tue Oct 13, 2026 · Tesla Service St. Petersburg</div>
+    <div class="what">Wheel wobble was tire foam separation (foam liner separated), not the rotor. Two new right-side tires installed; all four balanced. Noise ~90%+ corrected, not fully resolved.</div>
+  </div>
+</div>
+
+<h2 id="carolines-whip">Caroline's whip (2018 Model 3 Long Range)</h2>
+<div class="list">
+  <div class="row">
+    <div class="row-top"><div class="name">No service visits recorded yet</div></div>
+    <div class="what">Nothing on file since the car joined the fleet in September 2026. When a visit happens, Muse logs it here.</div>
+    <div class="what"><b>Known item:</b> rear glass is cracked (does not leak).</div>
+  </div>
+</div>
+
+<div class="updated" id="updated">Service history · Smith Robotaxi HQ</div>
+<script>
+  // Refresh the Miracle Whip section from service_log.json when reachable,
+  // so this page tracks Muse's fleet records without a rebuild.
+  fetch('service_log.json', {cache: 'no-store'}).then(function(r){ return r.json(); }).then(function(log){
+    var list = document.getElementById('miracle-list');
+    if (!log || !log.entries || !log.entries.length) return;
+    var fmt = function(iso){
+      var d = new Date(iso + 'T12:00:00');
+      return d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric'});
+    };
+    var html = '';
+    log.entries.slice().reverse().forEach(function(e){
+      var up = e.status === 'upcoming';
+      html += '<div class="row"><div class="row-top"><div class="name">Visit ' + e.visit + '</div>'
+        + '<div class="pill' + (up ? ' up' : '') + '">' + (up ? 'Upcoming' : 'Done') + '</div></div>'
+        + '<div class="when">' + fmt(e.date) + (e.time_et ? ', ' + e.time_et : '') + ' · ' + (e.location || '')
+        + (e.charges ? ' · ' + e.charges : '') + '</div>';
+      if (e.work) html += '<div class="what">' + e.work + '</div>';
+      if (e.diagnosis) html += '<div class="what"><b>Diagnosis:</b> ' + e.diagnosis + '</div>';
+      if (e.outcome) html += '<div class="what"><b>Outcome:</b> ' + e.outcome + '</div>';
+      html += '</div>';
+    });
+    (log.carvana_notes || []).forEach(function(n){
+      html += '<div class="row"><div class="row-top"><div class="name">Carvana note</div></div>'
+        + '<div class="when">' + fmt(n.date) + ' · ' + n.source + '</div>'
+        + '<div class="what">' + n.note + '</div></div>';
+    });
+    list.innerHTML = html;
+    document.getElementById('updated').textContent = 'Service history · synced from service_log.json · Smith Robotaxi HQ';
+  }).catch(function(){});
+</script>
+</body>
+</html>
