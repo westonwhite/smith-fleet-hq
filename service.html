@@ -83,8 +83,9 @@
     var html = '';
     log.entries.slice().reverse().forEach(function(e){
       var up = e.status === 'upcoming';
-      html += '<div class="row"><div class="row-top"><div class="name">Visit ' + e.visit + '</div>'
-        + '<div class="pill' + (up ? ' up' : '') + '">' + (up ? 'Upcoming' : 'Done') + '</div></div>'
+      var test = e.status === 'owner_test';
+      html += '<div class="row"><div class="row-top"><div class="name">' + (test ? 'Owner test' : 'Visit ' + e.visit) + '</div>'
+        + '<div class="pill' + (up ? ' up' : '') + '">' + (up ? 'Upcoming' : (test ? 'Owner test' : 'Done')) + '</div></div>'
         + '<div class="when">' + fmt(e.date) + (e.time_et ? ', ' + e.time_et : '') + ' · ' + (e.location || '')
         + (e.charges ? ' · ' + e.charges : '') + '</div>';
       if (e.work) html += '<div class="what">' + e.work + '</div>';

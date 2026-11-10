@@ -1,1 +1,60 @@
-{"car":"model3_2025","carvana_notes":[{"date":"2026-11-05","framing":"This is the second Tesla service attempt on the same never-fixed issue; Carvana's side is noted/good (documented, no case number needed).","note":"Phoebe put the full wheel-noise timeline on Weston's account: original noise, Oct 13 Tesla visit, Nov 5 visit 2 (rotation + rotors ordered, still unresolved), and Nov 18 visit 3 as continuing the same original complaint under the earlier $0-deductible notes. No case number provided (\"everything is documented\"). No new repair claim was opened.","source":"Carvana advocate Phoebe (My Cars live chat)"}],"entries":[{"charges":null,"date":"2026-10-13","diagnosis":"Wheel wobble was tire foam separation (foam liner separated), not the rotor.","location":"Tesla Service St. Petersburg","outcome":"Noise ~90%+ corrected, not fully resolved.","status":"done","visit":1,"work":"Two new right-side tires installed; all four balanced."},{"charges":"No charges","date":"2026-11-05","diagnosis":"Second visit for the ongoing wheel \"wub wub\" noise; service could not isolate the noise.","location":"Tesla Service St. Petersburg","outcome":"Noise still unresolved. Service manager ordered two sets of rotors to try.","status":"done","visit":2,"work":"Tire rotation at 33,922 miles (odometer on arrival at Tesla Service): the new tires from Oct 13 are now on the rear; the older tires are on the front.","odometer_mi":33922,"tires":"New tires (installed Oct 13) on the rear; older tires on the front, as of the Nov 5 rotation at 33,922 miles."},{"charges":null,"date":"2026-11-18","diagnosis":null,"location":"Tesla Service St. Petersburg","outcome":null,"status":"upcoming","time_et":"12:15-1:15 PM","visit":3,"work":"Rotor trial / further diagnosis of the same wheel-noise issue."}],"name":"Miracle Whip (2025 Model 3)","note":"Service log for the Miracle Whip. The Tesla app has no service-log screen yet, so this file is the tracker's service record until a future app build surfaces it. Never put VIN, purchase #, claim #, or other sensitive IDs in this file.","updated_at":"2026-11-07T08:16:00-05:00","updated_by":"Muse (Weston 2026-11-07: tire positions + rotation mileage added; mileage verified from Tessie drive record, car arrived at Tesla Service Nov 5 at 33,922 mi)"}
+{
+  "car": "model3_2025",
+  "carvana_notes": [
+    {
+      "date": "2026-11-05",
+      "framing": "This is the second Tesla service attempt on the same never-fixed issue; Carvana's side is noted/good (documented, no case number needed).",
+      "note": "Phoebe put the full wheel-noise timeline on Weston's account: original noise, Oct 13 Tesla visit, Nov 5 visit 2 (rotation + rotors ordered, still unresolved), and Nov 18 visit 3 as continuing the same original complaint under the earlier $0-deductible notes. No case number provided (\"everything is documented\"). No new repair claim was opened.",
+      "source": "Carvana advocate Phoebe (My Cars live chat)"
+    }
+  ],
+  "entries": [
+    {
+      "charges": null,
+      "date": "2026-10-13",
+      "diagnosis": "Wheel wobble was tire foam separation (foam liner separated), not the rotor.",
+      "location": "Tesla Service St. Petersburg",
+      "outcome": "Noise ~90%+ corrected, not fully resolved.",
+      "status": "done",
+      "visit": 1,
+      "work": "Two new right-side tires installed; all four balanced."
+    },
+    {
+      "charges": "No charges",
+      "date": "2026-11-05",
+      "diagnosis": "Second visit for the ongoing wheel \"wub wub\" noise; service could not isolate the noise.",
+      "location": "Tesla Service St. Petersburg",
+      "outcome": "Noise still unresolved. Service manager ordered two sets of rotors to try.",
+      "status": "done",
+      "visit": 2,
+      "work": "Tire rotation at 33,922 miles (odometer on arrival at Tesla Service): the new tires from Oct 13 are now on the rear; the older tires are on the front.",
+      "odometer_mi": 33922,
+      "tires": "New tires (installed Oct 13) on the rear; older tires on the front, as of the Nov 5 rotation at 33,922 miles."
+    },
+    {
+      "date": "2026-11-10",
+      "status": "owner_test",
+      "visit": "interim",
+      "location": "Home (owner test)",
+      "work": "Owner swapped the left side wheels front to back only: the new Oct 13 tire from the left rear moved to the left front, and the older left front tire moved to the left rear. Right side unchanged.",
+      "outcome": "Spin test at the left front: visible wobble in the tread/wheel as it spun, seen with both wheel assemblies mounted at that corner; a faint metallic sound when spun fast; no play in the wheel. Road test (road not especially smooth, so not conclusive): noise was noticeably quieter / not bad at all, but still audible, still seemed to come from the front, and the front left still sounded a little louder than the front right.",
+      "diagnosis": "Owner observation for Nov 18 visit: because the wobble showed at the left front with both wheels, and the noise stayed at the front left while getting quieter with the new tire up front, this points more toward the rotor or hub at the left front being slightly bent, with the old front tire possibly cupped from running on it. Not proven; to be checked at the Nov 18 rotor trial.",
+      "charges": null
+    },
+    {
+      "charges": null,
+      "date": "2026-11-18",
+      "diagnosis": null,
+      "location": "Tesla Service St. Petersburg",
+      "outcome": null,
+      "status": "upcoming",
+      "time_et": "12:15-1:15 PM",
+      "visit": 3,
+      "work": "Rotor trial / further diagnosis of the same wheel-noise issue."
+    }
+  ],
+  "name": "Miracle Whip (2025 Model 3)",
+  "note": "Service log for the Miracle Whip. The Tesla app has no service-log screen yet, so this file is the tracker's service record until a future app build surfaces it. Never put VIN, purchase #, claim #, or other sensitive IDs in this file.",
+  "updated_at": "2026-11-10T11:50:00-05:00",
+  "updated_by": "Muse (Weston 2026-11-07: tire positions + rotation mileage added; mileage verified from Tessie drive record, car arrived at Tesla Service Nov 5 at 33,922 mi)"
+}
