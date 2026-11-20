@@ -46,8 +46,8 @@
       "date": "2026-11-18",
       "diagnosis": null,
       "location": "Tesla Service St. Petersburg",
-      "outcome": null,
-      "status": "upcoming",
+      "outcome": "Pending — visit complete, but Weston has not yet reported whether the noise is fixed or what was done. Car still at the service center as of Fri Nov 20 morning (morning precondition skipped, 22.73 mi from home).",
+      "status": "done",
       "time_et": "12:15-1:15 PM",
       "visit": 3,
       "work": "Rotor trial / further diagnosis of the same wheel-noise issue."
