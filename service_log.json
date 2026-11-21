@@ -46,15 +46,15 @@
       "date": "2026-11-18",
       "diagnosis": null,
       "location": "Tesla Service St. Petersburg",
-      "outcome": "Pending — visit complete, but Weston has not yet reported whether the noise is fixed or what was done. Car still at the service center as of Fri Nov 20 morning (morning precondition skipped, 22.73 mi from home).",
+      "outcome": "Left-front hub and rotor replaced. Per Weston's Nov 19-20 follow-up emails to Diaz (he has not told Muse the outcome directly): there are no service notes showing the tire was checked, even though he had moved the noisy tire to the left rear before drop-off, and the team confirmed at pickup that there are no notes on the tire being checked. Whether the noise itself is gone has not been stated yet. Car was picked up Fri Nov 20: at the office by 4:52 PM, home and charging by ~6:46 PM (41%, Duke stopped the charge at 6:54 PM in the avoid window; resumes 11 PM).",
       "status": "done",
       "time_et": "12:15-1:15 PM",
       "visit": 3,
-      "work": "Rotor trial / further diagnosis of the same wheel-noise issue."
+      "work": "Replaced the left-front hub and rotor (the hub/bearing assembly Weston asked Diaz to have on hand, plus one of the two rotors ordered after visit 2)."
     }
   ],
   "name": "Miracle Whip (2025 Model 3)",
   "note": "Service log for the Miracle Whip. The Tesla app has no service-log screen yet, so this file is the tracker's service record until a future app build surfaces it. Never put VIN, purchase #, claim #, or other sensitive IDs in this file.",
-  "updated_at": "2026-11-10T11:50:00-05:00",
-  "updated_by": "Muse (Weston 2026-11-07: tire positions + rotation mileage added; mileage verified from Tessie drive record, car arrived at Tesla Service Nov 5 at 33,922 mi)"
+  "updated_at": "2026-11-21T10:45:00-05:00",
+  "updated_by": "Muse (visit 3 work/outcome filled in 2026-11-21 from Weston's own Nov 19-20 follow-up emails to Diaz, found in the Gmail triage he requested; noise resolution still unstated)"
 }
